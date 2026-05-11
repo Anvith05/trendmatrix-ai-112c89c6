@@ -307,3 +307,20 @@ export const searchUniverse = createServerFn({ method: "GET" })
       .or(`symbol.ilike.%${q}%,name.ilike.%${q}%`).limit(10);
     return rows ?? [];
   });
+
+export const getRecommendations = createServerFn({ method: "GET" }).handler(async () => {
+  // Auto-archive expired before reading
+  await supabaseAdmin
+    .from("recommendations")
+    .update({ status: "historical", archived_at: new Date().toISOString(), outcome: "expired" })
+    .eq("status", "active")
+    .lt("expires_at", new Date().toISOString());
+
+  const { data: active } = await supabaseAdmin
+    .from("recommendations").select("*").eq("status", "active")
+    .order("swing_score", { ascending: false }).limit(5);
+  const { data: history } = await supabaseAdmin
+    .from("recommendations").select("*").eq("status", "historical")
+    .order("archived_at", { ascending: false }).limit(50);
+  return { active: active ?? [], history: history ?? [] };
+});
