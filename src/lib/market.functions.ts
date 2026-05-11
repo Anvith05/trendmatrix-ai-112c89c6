@@ -13,29 +13,39 @@ async function getBenchmark() {
   return r?.candles ?? [];
 }
 
-async function loadTrainingTags() {
-  const { data } = await supabaseAdmin.from("training_examples").select("label, tags");
+type LibExample = {
+  tags: string[];
+  label: string;
+  monthly_trend?: string;
+  weekly_structure?: string;
+  volume_behavior?: string;
+  quality: number;
+};
+
+async function loadTrainingLibrary(): Promise<{ examples: LibExample[]; tagFreq: Record<string, number> }> {
+  const { data } = await supabaseAdmin
+    .from("training_examples")
+    .select("label, tags, features");
   const tagFreq: Record<string, number> = {};
+  const examples: LibExample[] = [];
   for (const row of data ?? []) {
-    for (const t of (row.tags as string[] | null) ?? []) {
-      tagFreq[t.toLowerCase()] = (tagFreq[t.toLowerCase()] ?? 0) + 1;
-    }
-    tagFreq[row.label.toLowerCase()] = (tagFreq[row.label.toLowerCase()] ?? 0) + 1;
+    const f = (row.features ?? {}) as any;
+    const tags = ((row.tags as string[] | null) ?? []).map((t) => t.toLowerCase());
+    for (const t of tags) tagFreq[t] = (tagFreq[t] ?? 0) + 1;
+    const labelTag = String(row.label).toLowerCase();
+    tagFreq[labelTag] = (tagFreq[labelTag] ?? 0) + 1;
+    examples.push({
+      tags: Array.from(new Set([...tags, labelTag])),
+      label: labelTag,
+      monthly_trend: f.monthly_trend,
+      weekly_structure: f.weekly_structure,
+      volume_behavior: f.volume_behavior,
+      quality: typeof f.quality === "number" ? f.quality : 60,
+    });
   }
-  return tagFreq;
+  return { examples, tagFreq };
 }
 
-function patternMatchScore(symbolTags: string[], libraryFreq: Record<string, number>): number {
-  if (Object.keys(libraryFreq).length === 0) return 55;
-  let matched = 0, total = 0;
-  for (const t of symbolTags) {
-    total += 1;
-    if (libraryFreq[t.toLowerCase()]) matched += 1 + Math.log(libraryFreq[t.toLowerCase()]);
-  }
-  return Math.round(Math.max(20, Math.min(95, 40 + matched * 12)));
-}
-
-// Cheap auto-tagger from candles, used when we don't have a chart image embedding.
 function autoTags(monthly: number, weekly: number, volume: number, rs: number): string[] {
   const tags: string[] = [];
   if (monthly >= 70) tags.push("strong_uptrend");
@@ -44,6 +54,45 @@ function autoTags(monthly: number, weekly: number, volume: number, rs: number): 
   if (rs >= 65) tags.push("relative_strength");
   if (monthly >= 70 && weekly >= 65) tags.push("successful_breakout");
   return tags;
+}
+
+// Derive structural descriptors from numeric scores so we can compare against
+// the vision-extracted features stored on each training example.
+function deriveStructure(monthly: number, weekly: number, volume: number) {
+  const monthly_trend = monthly >= 60 ? "up" : monthly <= 40 ? "down" : "sideways";
+  const weekly_structure =
+    weekly >= 70 ? "tight_base" : weekly >= 55 ? "loose_base" : monthly >= 60 ? "expansion" : "downtrend";
+  const volume_behavior =
+    volume >= 75 ? "climax" : volume >= 60 ? "accumulation" : volume <= 35 ? "dry_up" : "neutral";
+  return { monthly_trend, weekly_structure, volume_behavior };
+}
+
+function patternMatchScore(
+  symbolTags: string[],
+  structure: { monthly_trend: string; weekly_structure: string; volume_behavior: string },
+  lib: { examples: LibExample[] },
+): number {
+  if (lib.examples.length === 0) return 55;
+  const symSet = new Set(symbolTags.map((t) => t.toLowerCase()));
+  let bestScore = 0;
+  let weightedSum = 0;
+  let weightTotal = 0;
+  for (const ex of lib.examples) {
+    let s = 0;
+    const overlap = ex.tags.filter((t) => symSet.has(t)).length;
+    const union = new Set([...ex.tags, ...symSet]).size || 1;
+    s += (overlap / union) * 60;
+    if (ex.monthly_trend && ex.monthly_trend === structure.monthly_trend) s += 14;
+    if (ex.weekly_structure && ex.weekly_structure === structure.weekly_structure) s += 14;
+    if (ex.volume_behavior && ex.volume_behavior === structure.volume_behavior) s += 12;
+    const qWeight = Math.max(0.3, ex.quality / 100);
+    weightedSum += s * qWeight;
+    weightTotal += qWeight;
+    if (s > bestScore) bestScore = s;
+  }
+  const avg = weightTotal ? weightedSum / weightTotal : 0;
+  const blended = 0.65 * bestScore + 0.35 * avg;
+  return Math.round(Math.max(20, Math.min(98, 25 + blended)));
 }
 
 export const getQuote = createServerFn({ method: "GET" })
