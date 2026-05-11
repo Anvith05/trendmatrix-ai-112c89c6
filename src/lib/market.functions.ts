@@ -191,7 +191,8 @@ export const runAgents = createServerFn({ method: "POST" })
         const r = scoreRS(q.candles, benchmark);
         const f = scoreFundamental(q);
         const tags = autoTags(m.score, w.score, v.score, r.score);
-        const history = patternMatchScore(tags, lib);
+        const structure = deriveStructure(m.score, w.score, v.score);
+        const history = patternMatchScore(tags, structure, lib);
         results.push({ u, q, m, w, v, r, f, history, tags });
       }
 
