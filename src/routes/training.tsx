@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { SiteNav } from "@/components/SiteNav";
 import { supabase } from "@/integrations/supabase/client";
 import { extractTrainingFeatures } from "@/lib/training.functions";
-import { Brain, Upload, Trash2, ImageIcon, Tag } from "lucide-react";
+import { Brain, Upload, Trash2, ImageIcon, Tag, Sparkles, TrendingUp, Activity, Gauge } from "lucide-react";
 
 export const Route = createFileRoute("/training")({ component: TrainingLab,
   head: () => ({ meta: [{ title: "AI Training Lab · TrendMatrix AI" }] }),
@@ -19,6 +19,14 @@ const LABELS = [
   { id: "weekly_consolidation", label: "Weekly consolidation" },
 ];
 
+type Features = {
+  tags?: string[];
+  monthly_trend?: string;
+  weekly_structure?: string;
+  volume_behavior?: string;
+  quality?: number;
+  summary?: string;
+};
 type Row = {
   id: string;
   image_path: string;
@@ -27,6 +35,8 @@ type Row = {
   symbol: string | null;
   sector: string | null;
   created_at: string;
+  tags: string[] | null;
+  features: Features | null;
 };
 
 function TrainingLab() {
@@ -62,9 +72,11 @@ function TrainingLab() {
 
   const extract = useServerFn(extractTrainingFeatures);
 
+  const [lastExtract, setLastExtract] = useState<Features | null>(null);
+
   async function save() {
     if (!file) { setMsg("Pick an image first."); return; }
-    setBusy(true); setMsg(null);
+    setBusy(true); setMsg(null); setLastExtract(null);
     try {
       const ext = file.name.split(".").pop() ?? "png";
       const path = `${crypto.randomUUID()}.${ext}`;
@@ -78,10 +90,11 @@ function TrainingLab() {
         sector: sector || null,
       }).select().single();
       if (ins.error) throw ins.error;
-      setMsg("Saved · extracting pattern features with AI…");
+      setMsg("Saved · AI is reading the chart…");
       try {
-        await extract({ data: { id: ins.data.id } });
-        setMsg("Saved · AI tagged this example and added it to the matching library.");
+        const features = await extract({ data: { id: ins.data.id } });
+        setLastExtract(features as Features);
+        setMsg("AI extraction complete · tags added to the pattern-matching library.");
       } catch (e: any) {
         setMsg(`Saved (vision extract failed: ${e?.message ?? e})`);
       }
@@ -170,6 +183,32 @@ function TrainingLab() {
               <Upload className="h-4 w-4" /> {busy ? "Saving…" : "Save example"}
             </button>
             {msg && <div className="mt-3 text-xs text-muted-foreground">{msg}</div>}
+            {lastExtract && (
+              <div className="mt-4 rounded-lg border border-primary/30 bg-primary/5 p-3">
+                <div className="flex items-center gap-2 text-[11px] font-mono uppercase text-primary">
+                  <Sparkles className="h-3 w-3" /> AI extracted from this chart
+                </div>
+                {lastExtract.summary && (
+                  <p className="mt-2 text-xs text-foreground">{lastExtract.summary}</p>
+                )}
+                <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
+                  <div className="flex items-center gap-1.5"><TrendingUp className="h-3 w-3 text-primary" /><span className="text-muted-foreground">Monthly:</span> <b>{lastExtract.monthly_trend}</b></div>
+                  <div className="flex items-center gap-1.5"><Activity className="h-3 w-3 text-primary" /><span className="text-muted-foreground">Weekly:</span> <b>{lastExtract.weekly_structure?.replace(/_/g, " ")}</b></div>
+                  <div className="flex items-center gap-1.5"><Activity className="h-3 w-3 text-primary" /><span className="text-muted-foreground">Volume:</span> <b>{lastExtract.volume_behavior?.replace(/_/g, " ")}</b></div>
+                  <div className="flex items-center gap-1.5"><Gauge className="h-3 w-3 text-primary" /><span className="text-muted-foreground">Quality:</span> <b>{lastExtract.quality}/100</b></div>
+                </div>
+                {lastExtract.tags && lastExtract.tags.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {lastExtract.tags.map((t) => (
+                      <span key={t} className="rounded border border-border bg-card px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">{t}</span>
+                    ))}
+                  </div>
+                )}
+                <div className="mt-2 text-[10px] text-muted-foreground">
+                  ✓ Sent to the pattern-matching agent — every NSE/BSE scan now compares against this example.
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Library */}
@@ -198,9 +237,22 @@ function TrainingLab() {
                       {r.symbol && <span className="font-mono text-xs font-semibold">{r.symbol}</span>}
                       {r.sector && <span className="text-[11px] text-muted-foreground">· {r.sector}</span>}
                     </div>
-                    {r.note && <p className="mt-1 line-clamp-3 text-xs text-muted-foreground">{r.note}</p>}
+                    {r.note && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{r.note}</p>}
+                    {r.features?.summary && (
+                      <p className="mt-1 line-clamp-2 text-[11px] italic text-foreground/80">
+                        <Sparkles className="mr-1 inline h-2.5 w-2.5 text-primary" />{r.features.summary}
+                      </p>
+                    )}
+                    {r.tags && r.tags.length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {r.tags.slice(0, 6).map((t) => (
+                          <span key={t} className="rounded border border-border bg-card px-1.5 py-0.5 text-[9px] font-mono text-muted-foreground">{t}</span>
+                        ))}
+                      </div>
+                    )}
                     <div className="mt-1 text-[10px] font-mono text-muted-foreground">
                       {new Date(r.created_at).toLocaleString()}
+                      {r.features ? <span className="ml-2 text-primary">· indexed</span> : <span className="ml-2 text-amber-500">· pending</span>}
                     </div>
                   </div>
                   <button onClick={() => remove(r)} className="self-start rounded-md p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
