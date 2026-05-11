@@ -120,8 +120,9 @@ export const getQuote = createServerFn({ method: "GET" })
     const f = scoreFundamental(q);
     const macro = scoreMacro(benchmark);
     const tags = autoTags(m.score, w.score, v.score, r.score);
-    const lib = await loadTrainingTags();
-    const history = patternMatchScore(tags, lib);
+    const structure = deriveStructure(m.score, w.score, v.score);
+    const lib = await loadTrainingLibrary();
+    const history = patternMatchScore(tags, structure, lib);
 
     // Sector score: avg monthly+weekly of sector peers in latest run
     let sector = 60;
