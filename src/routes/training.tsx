@@ -72,9 +72,11 @@ function TrainingLab() {
 
   const extract = useServerFn(extractTrainingFeatures);
 
+  const [lastExtract, setLastExtract] = useState<Features | null>(null);
+
   async function save() {
     if (!file) { setMsg("Pick an image first."); return; }
-    setBusy(true); setMsg(null);
+    setBusy(true); setMsg(null); setLastExtract(null);
     try {
       const ext = file.name.split(".").pop() ?? "png";
       const path = `${crypto.randomUUID()}.${ext}`;
@@ -88,10 +90,11 @@ function TrainingLab() {
         sector: sector || null,
       }).select().single();
       if (ins.error) throw ins.error;
-      setMsg("Saved · extracting pattern features with AI…");
+      setMsg("Saved · AI is reading the chart…");
       try {
-        await extract({ data: { id: ins.data.id } });
-        setMsg("Saved · AI tagged this example and added it to the matching library.");
+        const features = await extract({ data: { id: ins.data.id } });
+        setLastExtract(features as Features);
+        setMsg("AI extraction complete · tags added to the pattern-matching library.");
       } catch (e: any) {
         setMsg(`Saved (vision extract failed: ${e?.message ?? e})`);
       }
