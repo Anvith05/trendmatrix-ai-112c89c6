@@ -9,38 +9,134 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TrainingRouteImport } from './routes/training'
+import { Route as SectorsRouteImport } from './routes/sectors'
+import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as AgentsRouteImport } from './routes/agents'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SectorsSectorIdRouteImport } from './routes/sectors.$sectorId'
 
+const TrainingRoute = TrainingRouteImport.update({
+  id: '/training',
+  path: '/training',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SectorsRoute = SectorsRouteImport.update({
+  id: '/sectors',
+  path: '/sectors',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AgentsRoute = AgentsRouteImport.update({
+  id: '/agents',
+  path: '/agents',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SectorsSectorIdRoute = SectorsSectorIdRouteImport.update({
+  id: '/$sectorId',
+  path: '/$sectorId',
+  getParentRoute: () => SectorsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/agents': typeof AgentsRoute
+  '/dashboard': typeof DashboardRoute
+  '/sectors': typeof SectorsRouteWithChildren
+  '/training': typeof TrainingRoute
+  '/sectors/$sectorId': typeof SectorsSectorIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/agents': typeof AgentsRoute
+  '/dashboard': typeof DashboardRoute
+  '/sectors': typeof SectorsRouteWithChildren
+  '/training': typeof TrainingRoute
+  '/sectors/$sectorId': typeof SectorsSectorIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/agents': typeof AgentsRoute
+  '/dashboard': typeof DashboardRoute
+  '/sectors': typeof SectorsRouteWithChildren
+  '/training': typeof TrainingRoute
+  '/sectors/$sectorId': typeof SectorsSectorIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/agents'
+    | '/dashboard'
+    | '/sectors'
+    | '/training'
+    | '/sectors/$sectorId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/agents'
+    | '/dashboard'
+    | '/sectors'
+    | '/training'
+    | '/sectors/$sectorId'
+  id:
+    | '__root__'
+    | '/'
+    | '/agents'
+    | '/dashboard'
+    | '/sectors'
+    | '/training'
+    | '/sectors/$sectorId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AgentsRoute: typeof AgentsRoute
+  DashboardRoute: typeof DashboardRoute
+  SectorsRoute: typeof SectorsRouteWithChildren
+  TrainingRoute: typeof TrainingRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/training': {
+      id: '/training'
+      path: '/training'
+      fullPath: '/training'
+      preLoaderRoute: typeof TrainingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sectors': {
+      id: '/sectors'
+      path: '/sectors'
+      fullPath: '/sectors'
+      preLoaderRoute: typeof SectorsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/agents': {
+      id: '/agents'
+      path: '/agents'
+      fullPath: '/agents'
+      preLoaderRoute: typeof AgentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,12 +144,44 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sectors/$sectorId': {
+      id: '/sectors/$sectorId'
+      path: '/$sectorId'
+      fullPath: '/sectors/$sectorId'
+      preLoaderRoute: typeof SectorsSectorIdRouteImport
+      parentRoute: typeof SectorsRoute
+    }
   }
 }
 
+interface SectorsRouteChildren {
+  SectorsSectorIdRoute: typeof SectorsSectorIdRoute
+}
+
+const SectorsRouteChildren: SectorsRouteChildren = {
+  SectorsSectorIdRoute: SectorsSectorIdRoute,
+}
+
+const SectorsRouteWithChildren =
+  SectorsRoute._addFileChildren(SectorsRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AgentsRoute: AgentsRoute,
+  DashboardRoute: DashboardRoute,
+  SectorsRoute: SectorsRouteWithChildren,
+  TrainingRoute: TrainingRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
