@@ -139,6 +139,72 @@ export type Database = {
           },
         ]
       }
+      recommendations: {
+        Row: {
+          archived_at: string | null
+          entry_price: number | null
+          expires_at: string
+          history_score: number
+          id: string
+          ltp: number | null
+          monthly_score: number
+          name: string | null
+          outcome: string | null
+          reasoning: Json | null
+          recommended_at: string
+          rs_score: number
+          sector: string | null
+          status: string
+          swing_score: number
+          symbol: string
+          tags: string[] | null
+          volume_score: number
+          weekly_score: number
+        }
+        Insert: {
+          archived_at?: string | null
+          entry_price?: number | null
+          expires_at?: string
+          history_score?: number
+          id?: string
+          ltp?: number | null
+          monthly_score?: number
+          name?: string | null
+          outcome?: string | null
+          reasoning?: Json | null
+          recommended_at?: string
+          rs_score?: number
+          sector?: string | null
+          status?: string
+          swing_score?: number
+          symbol: string
+          tags?: string[] | null
+          volume_score?: number
+          weekly_score?: number
+        }
+        Update: {
+          archived_at?: string | null
+          entry_price?: number | null
+          expires_at?: string
+          history_score?: number
+          id?: string
+          ltp?: number | null
+          monthly_score?: number
+          name?: string | null
+          outcome?: string | null
+          reasoning?: Json | null
+          recommended_at?: string
+          rs_score?: number
+          sector?: string | null
+          status?: string
+          swing_score?: number
+          symbol?: string
+          tags?: string[] | null
+          volume_score?: number
+          weekly_score?: number
+        }
+        Relationships: []
+      }
       stock_universe: {
         Row: {
           active: boolean
