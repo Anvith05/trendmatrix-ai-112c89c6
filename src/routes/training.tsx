@@ -237,9 +237,22 @@ function TrainingLab() {
                       {r.symbol && <span className="font-mono text-xs font-semibold">{r.symbol}</span>}
                       {r.sector && <span className="text-[11px] text-muted-foreground">· {r.sector}</span>}
                     </div>
-                    {r.note && <p className="mt-1 line-clamp-3 text-xs text-muted-foreground">{r.note}</p>}
+                    {r.note && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{r.note}</p>}
+                    {r.features?.summary && (
+                      <p className="mt-1 line-clamp-2 text-[11px] italic text-foreground/80">
+                        <Sparkles className="mr-1 inline h-2.5 w-2.5 text-primary" />{r.features.summary}
+                      </p>
+                    )}
+                    {r.tags && r.tags.length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {r.tags.slice(0, 6).map((t) => (
+                          <span key={t} className="rounded border border-border bg-card px-1.5 py-0.5 text-[9px] font-mono text-muted-foreground">{t}</span>
+                        ))}
+                      </div>
+                    )}
                     <div className="mt-1 text-[10px] font-mono text-muted-foreground">
                       {new Date(r.created_at).toLocaleString()}
+                      {r.features ? <span className="ml-2 text-primary">· indexed</span> : <span className="ml-2 text-amber-500">· pending</span>}
                     </div>
                   </div>
                   <button onClick={() => remove(r)} className="self-start rounded-md p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
