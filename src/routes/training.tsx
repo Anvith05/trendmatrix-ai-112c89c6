@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { SiteNav } from "@/components/SiteNav";
 import { supabase } from "@/integrations/supabase/client";
+import { extractTrainingFeatures } from "@/lib/training.functions";
 import { Brain, Upload, Trash2, ImageIcon, Tag } from "lucide-react";
 
 export const Route = createFileRoute("/training")({ component: TrainingLab,
@@ -58,6 +60,8 @@ function TrainingLab() {
     setPreview(f ? URL.createObjectURL(f) : null);
   }
 
+  const extract = useServerFn(extractTrainingFeatures);
+
   async function save() {
     if (!file) { setMsg("Pick an image first."); return; }
     setBusy(true); setMsg(null);
@@ -72,11 +76,17 @@ function TrainingLab() {
         note: note || null,
         symbol: symbol || null,
         sector: sector || null,
-      });
+      }).select().single();
       if (ins.error) throw ins.error;
+      setMsg("Saved · extracting pattern features with AI…");
+      try {
+        await extract({ data: { id: ins.data.id } });
+        setMsg("Saved · AI tagged this example and added it to the matching library.");
+      } catch (e: any) {
+        setMsg(`Saved (vision extract failed: ${e?.message ?? e})`);
+      }
       setFile(null); setPreview(null); setNote(""); setSymbol(""); setSector("");
       if (fileRef.current) fileRef.current.value = "";
-      setMsg("Saved · the AI will study this example on the next training pass.");
       await load();
     } catch (e: any) {
       setMsg(e?.message ?? "Upload failed");
