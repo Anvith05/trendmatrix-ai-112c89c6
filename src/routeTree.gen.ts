@@ -15,6 +15,7 @@ import { Route as AgentsRouteImport } from './routes/agents'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SectorsIndexRouteImport } from './routes/sectors.index'
 import { Route as SectorsSectorIdRouteImport } from './routes/sectors.$sectorId'
+import { Route as ApiPublicRunAgentsRouteImport } from './routes/api/public/run-agents'
 
 const TrainingRoute = TrainingRouteImport.update({
   id: '/training',
@@ -42,8 +43,13 @@ const SectorsIndexRoute = SectorsIndexRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const SectorsSectorIdRoute = SectorsSectorIdRouteImport.update({
-  id: '/sectors/$sectorId',
-  path: '/sectors/$sectorId',
+  id: '/$sectorId',
+  path: '/$sectorId',
+  getParentRoute: () => SectorsRoute,
+} as any)
+const ApiPublicRunAgentsRoute = ApiPublicRunAgentsRouteImport.update({
+  id: '/api/public/run-agents',
+  path: '/api/public/run-agents',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -54,6 +60,7 @@ export interface FileRoutesByFullPath {
   '/training': typeof TrainingRoute
   '/sectors/$sectorId': typeof SectorsSectorIdRoute
   '/sectors/': typeof SectorsIndexRoute
+  '/api/public/run-agents': typeof ApiPublicRunAgentsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -62,6 +69,7 @@ export interface FileRoutesByTo {
   '/training': typeof TrainingRoute
   '/sectors/$sectorId': typeof SectorsSectorIdRoute
   '/sectors': typeof SectorsIndexRoute
+  '/api/public/run-agents': typeof ApiPublicRunAgentsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -71,6 +79,7 @@ export interface FileRoutesById {
   '/training': typeof TrainingRoute
   '/sectors/$sectorId': typeof SectorsSectorIdRoute
   '/sectors/': typeof SectorsIndexRoute
+  '/api/public/run-agents': typeof ApiPublicRunAgentsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -81,6 +90,7 @@ export interface FileRouteTypes {
     | '/training'
     | '/sectors/$sectorId'
     | '/sectors/'
+    | '/api/public/run-agents'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -89,6 +99,7 @@ export interface FileRouteTypes {
     | '/training'
     | '/sectors/$sectorId'
     | '/sectors'
+    | '/api/public/run-agents'
   id:
     | '__root__'
     | '/'
@@ -97,6 +108,7 @@ export interface FileRouteTypes {
     | '/training'
     | '/sectors/$sectorId'
     | '/sectors/'
+    | '/api/public/run-agents'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -104,8 +116,8 @@ export interface RootRouteChildren {
   AgentsRoute: typeof AgentsRoute
   DashboardRoute: typeof DashboardRoute
   TrainingRoute: typeof TrainingRoute
-  SectorsSectorIdRoute: typeof SectorsSectorIdRoute
   SectorsIndexRoute: typeof SectorsIndexRoute
+  ApiPublicRunAgentsRoute: typeof ApiPublicRunAgentsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -147,9 +159,16 @@ declare module '@tanstack/react-router' {
     }
     '/sectors/$sectorId': {
       id: '/sectors/$sectorId'
-      path: '/sectors/$sectorId'
+      path: '/$sectorId'
       fullPath: '/sectors/$sectorId'
       preLoaderRoute: typeof SectorsSectorIdRouteImport
+      parentRoute: typeof SectorsRoute
+    }
+    '/api/public/run-agents': {
+      id: '/api/public/run-agents'
+      path: '/api/public/run-agents'
+      fullPath: '/api/public/run-agents'
+      preLoaderRoute: typeof ApiPublicRunAgentsRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -160,9 +179,19 @@ const rootRouteChildren: RootRouteChildren = {
   AgentsRoute: AgentsRoute,
   DashboardRoute: DashboardRoute,
   TrainingRoute: TrainingRoute,
-  SectorsSectorIdRoute: SectorsSectorIdRoute,
   SectorsIndexRoute: SectorsIndexRoute,
+  ApiPublicRunAgentsRoute: ApiPublicRunAgentsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
