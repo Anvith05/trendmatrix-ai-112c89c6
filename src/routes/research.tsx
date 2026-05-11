@@ -12,7 +12,7 @@ export const Route = createFileRoute("/research")({
   head: () => ({ meta: [{ title: "Research · TrendMatrix AI" }, { name: "description", content: "Live NSE/BSE price + 8-agent AI analytics for any Indian stock." }] }),
 });
 
-const AGENT_LABELS: [keyof Quote["scores"], string][] = [
+const AGENT_LABELS: [string, string][] = [
   ["monthly", "Monthly Trend"],
   ["weekly", "Weekly Consolidation"],
   ["sector", "Sector Sync"],
@@ -180,9 +180,9 @@ function Research() {
                   <div className="mt-4">
                     <div className="text-[10px] font-mono uppercase text-muted-foreground">Detected pattern tags</div>
                     <div className="mt-1 flex flex-wrap gap-1">
-                      {quote.tags.map((t) => (
-                        <span key={t} className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-mono text-primary">{t}</span>
-                      ))}
+                {quote.tags.map((t: string) => (
+                      <span key={t} className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-mono text-primary">{t}</span>
+                    ))}
                     </div>
                   </div>
                 )}
@@ -192,7 +192,7 @@ function Research() {
                 <div className="mb-3 text-sm font-semibold">8-Agent Breakdown</div>
                 <div className="space-y-2">
                   {AGENT_LABELS.map(([k, label]) => {
-                    const v = quote.scores[k] as number;
+                    const v = (quote.scores as any)[k] as number;
                     return (
                       <div key={k}>
                         <div className="flex items-center justify-between text-xs">
