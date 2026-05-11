@@ -19,6 +19,14 @@ const LABELS = [
   { id: "weekly_consolidation", label: "Weekly consolidation" },
 ];
 
+type Features = {
+  tags?: string[];
+  monthly_trend?: string;
+  weekly_structure?: string;
+  volume_behavior?: string;
+  quality?: number;
+  summary?: string;
+};
 type Row = {
   id: string;
   image_path: string;
@@ -27,6 +35,8 @@ type Row = {
   symbol: string | null;
   sector: string | null;
   created_at: string;
+  tags: string[] | null;
+  features: Features | null;
 };
 
 function TrainingLab() {
