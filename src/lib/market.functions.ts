@@ -178,7 +178,7 @@ export const runAgents = createServerFn({ method: "POST" })
 
       const benchmark = await getBenchmark();
       const macro = scoreMacro(benchmark);
-      const lib = await loadTrainingTags();
+      const lib = await loadTrainingLibrary();
 
       // First pass: per-symbol scores (no sector yet)
       const results: any[] = [];
