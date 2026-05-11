@@ -42,9 +42,9 @@ const SectorsIndexRoute = SectorsIndexRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const SectorsSectorIdRoute = SectorsSectorIdRouteImport.update({
-  id: '/$sectorId',
-  path: '/$sectorId',
-  getParentRoute: () => SectorsRoute,
+  id: '/sectors/$sectorId',
+  path: '/sectors/$sectorId',
+  getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -104,6 +104,7 @@ export interface RootRouteChildren {
   AgentsRoute: typeof AgentsRoute
   DashboardRoute: typeof DashboardRoute
   TrainingRoute: typeof TrainingRoute
+  SectorsSectorIdRoute: typeof SectorsSectorIdRoute
   SectorsIndexRoute: typeof SectorsIndexRoute
 }
 
@@ -146,10 +147,10 @@ declare module '@tanstack/react-router' {
     }
     '/sectors/$sectorId': {
       id: '/sectors/$sectorId'
-      path: '/$sectorId'
+      path: '/sectors/$sectorId'
       fullPath: '/sectors/$sectorId'
       preLoaderRoute: typeof SectorsSectorIdRouteImport
-      parentRoute: typeof SectorsRoute
+      parentRoute: typeof rootRouteImport
     }
   }
 }
@@ -159,18 +160,9 @@ const rootRouteChildren: RootRouteChildren = {
   AgentsRoute: AgentsRoute,
   DashboardRoute: DashboardRoute,
   TrainingRoute: TrainingRoute,
+  SectorsSectorIdRoute: SectorsSectorIdRoute,
   SectorsIndexRoute: SectorsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
