@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { SiteNav } from "@/components/SiteNav";
 import { supabase } from "@/integrations/supabase/client";
 import { extractTrainingFeatures } from "@/lib/training.functions";
-import { Brain, Upload, Trash2, ImageIcon, Tag } from "lucide-react";
+import { Brain, Upload, Trash2, ImageIcon, Tag, Sparkles, TrendingUp, Activity, Gauge } from "lucide-react";
 
 export const Route = createFileRoute("/training")({ component: TrainingLab,
   head: () => ({ meta: [{ title: "AI Training Lab · TrendMatrix AI" }] }),
