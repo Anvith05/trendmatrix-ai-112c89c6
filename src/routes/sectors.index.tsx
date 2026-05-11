@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { SiteNav } from "@/components/SiteNav";
 import { sectors } from "@/lib/mockData";
 
-export const Route = createFileRoute("/sectors")({ component: SectorsPage,
+export const Route = createFileRoute("/sectors/")({ component: SectorsPage,
   head: () => ({ meta: [{ title: "Sector Heatmap · TrendMatrix AI" }] }),
 });
 
