@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TrainingRouteImport } from './routes/training'
+import { Route as ResearchRouteImport } from './routes/research'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as AgentsRouteImport } from './routes/agents'
 import { Route as IndexRouteImport } from './routes/index'
@@ -20,6 +21,11 @@ import { Route as ApiPublicRunAgentsRouteImport } from './routes/api/public/run-
 const TrainingRoute = TrainingRouteImport.update({
   id: '/training',
   path: '/training',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResearchRoute = ResearchRouteImport.update({
+  id: '/research',
+  path: '/research',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardRoute = DashboardRouteImport.update({
@@ -57,6 +63,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
   '/dashboard': typeof DashboardRoute
+  '/research': typeof ResearchRoute
   '/training': typeof TrainingRoute
   '/sectors/$sectorId': typeof SectorsSectorIdRoute
   '/sectors/': typeof SectorsIndexRoute
@@ -66,6 +73,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
   '/dashboard': typeof DashboardRoute
+  '/research': typeof ResearchRoute
   '/training': typeof TrainingRoute
   '/sectors/$sectorId': typeof SectorsSectorIdRoute
   '/sectors': typeof SectorsIndexRoute
@@ -76,6 +84,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
   '/dashboard': typeof DashboardRoute
+  '/research': typeof ResearchRoute
   '/training': typeof TrainingRoute
   '/sectors/$sectorId': typeof SectorsSectorIdRoute
   '/sectors/': typeof SectorsIndexRoute
@@ -87,6 +96,7 @@ export interface FileRouteTypes {
     | '/'
     | '/agents'
     | '/dashboard'
+    | '/research'
     | '/training'
     | '/sectors/$sectorId'
     | '/sectors/'
@@ -96,6 +106,7 @@ export interface FileRouteTypes {
     | '/'
     | '/agents'
     | '/dashboard'
+    | '/research'
     | '/training'
     | '/sectors/$sectorId'
     | '/sectors'
@@ -105,6 +116,7 @@ export interface FileRouteTypes {
     | '/'
     | '/agents'
     | '/dashboard'
+    | '/research'
     | '/training'
     | '/sectors/$sectorId'
     | '/sectors/'
@@ -115,6 +127,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AgentsRoute: typeof AgentsRoute
   DashboardRoute: typeof DashboardRoute
+  ResearchRoute: typeof ResearchRoute
   TrainingRoute: typeof TrainingRoute
   SectorsIndexRoute: typeof SectorsIndexRoute
   ApiPublicRunAgentsRoute: typeof ApiPublicRunAgentsRoute
@@ -127,6 +140,13 @@ declare module '@tanstack/react-router' {
       path: '/training'
       fullPath: '/training'
       preLoaderRoute: typeof TrainingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/research': {
+      id: '/research'
+      path: '/research'
+      fullPath: '/research'
+      preLoaderRoute: typeof ResearchRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard': {
@@ -178,6 +198,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AgentsRoute: AgentsRoute,
   DashboardRoute: DashboardRoute,
+  ResearchRoute: ResearchRoute,
   TrainingRoute: TrainingRoute,
   SectorsIndexRoute: SectorsIndexRoute,
   ApiPublicRunAgentsRoute: ApiPublicRunAgentsRoute,
