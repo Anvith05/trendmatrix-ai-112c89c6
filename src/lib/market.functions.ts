@@ -226,12 +226,57 @@ export const runAgents = createServerFn({ method: "POST" })
       });
 
       if (rows.length) await supabaseAdmin.from("rankings").insert(rows);
+
+      // === Strong recommendations pipeline ===
+      // 1) Archive expired active recommendations
+      await supabaseAdmin
+        .from("recommendations")
+        .update({ status: "historical", archived_at: new Date().toISOString(), outcome: "expired" })
+        .eq("status", "active")
+        .lt("expires_at", new Date().toISOString());
+
+      // 2) Pick top breakout candidates (must match a training pattern)
+      const candidates = results
+        .map((x) => {
+          const sector = sectorScore[x.u.sector] ?? 60;
+          const s = combine({
+            monthly: x.m.score, weekly: x.w.score, sector, history: x.history,
+            fundamental: x.f.score, macro, rs: x.r.score, volume: x.v.score,
+            reasoning: { monthly: x.m.reason, weekly: x.w.reason, volume: x.v.reason, rs: x.r.reason, fundamental: x.f.reason },
+          } as any);
+          return { x, s };
+        })
+        .filter(({ s, x }) =>
+          s.swing >= 78 &&
+          x.history >= 65 &&
+          (s.status === "breaking_out" || s.status === "basing") &&
+          x.tags.length > 0,
+        )
+        .sort((a, b) => b.s.swing - a.s.swing)
+        .slice(0, 5);
+
+      // 3) Fetch currently-active symbols to avoid duplicates
+      const { data: activeRows } = await supabaseAdmin
+        .from("recommendations").select("symbol").eq("status", "active");
+      const activeSet = new Set((activeRows ?? []).map((r) => r.symbol));
+
+      const newPicks = candidates
+        .filter(({ x }) => !activeSet.has(x.u.symbol))
+        .map(({ x, s }) => ({
+          symbol: x.u.symbol, name: x.u.name, sector: x.u.sector,
+          ltp: x.q.ltp, entry_price: x.q.ltp,
+          swing_score: s.swing, monthly_score: s.monthly, weekly_score: s.weekly,
+          history_score: s.history, volume_score: s.volume, rs_score: s.rs,
+          tags: x.tags, reasoning: s.reasoning, status: "active",
+        }));
+      if (newPicks.length) await supabaseAdmin.from("recommendations").insert(newPicks);
+
       await supabaseAdmin.from("agent_runs").update({
         finished_at: new Date().toISOString(), status: "success",
         scanned: universe.length, ranked: rows.length,
       }).eq("id", run.id);
 
-      return { run_id: run.id, scanned: universe.length, ranked: rows.length };
+      return { run_id: run.id, scanned: universe.length, ranked: rows.length, new_picks: newPicks.length };
     } catch (e: any) {
       console.error("[runAgents]", e);
       await supabaseAdmin.from("agent_runs").update({
