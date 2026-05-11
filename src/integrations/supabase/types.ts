@@ -14,33 +14,197 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_runs: {
+        Row: {
+          error: string | null
+          finished_at: string | null
+          id: string
+          ranked: number
+          scanned: number
+          source: string
+          started_at: string
+          status: string
+        }
+        Insert: {
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          ranked?: number
+          scanned?: number
+          source?: string
+          started_at?: string
+          status?: string
+        }
+        Update: {
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          ranked?: number
+          scanned?: number
+          source?: string
+          started_at?: string
+          status?: string
+        }
+        Relationships: []
+      }
+      price_cache: {
+        Row: {
+          payload: Json
+          symbol: string
+          updated_at: string
+        }
+        Insert: {
+          payload: Json
+          symbol: string
+          updated_at?: string
+        }
+        Update: {
+          payload?: Json
+          symbol?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      rankings: {
+        Row: {
+          change_pct: number | null
+          created_at: string
+          fundamental_score: number
+          history_score: number
+          id: string
+          ltp: number | null
+          macro_score: number
+          monthly_score: number
+          name: string | null
+          reasoning: Json | null
+          rs_score: number
+          run_id: string | null
+          sector: string | null
+          sector_score: number
+          status: string
+          swing_score: number
+          symbol: string
+          volume_score: number
+          weekly_score: number
+        }
+        Insert: {
+          change_pct?: number | null
+          created_at?: string
+          fundamental_score?: number
+          history_score?: number
+          id?: string
+          ltp?: number | null
+          macro_score?: number
+          monthly_score?: number
+          name?: string | null
+          reasoning?: Json | null
+          rs_score?: number
+          run_id?: string | null
+          sector?: string | null
+          sector_score?: number
+          status?: string
+          swing_score?: number
+          symbol: string
+          volume_score?: number
+          weekly_score?: number
+        }
+        Update: {
+          change_pct?: number | null
+          created_at?: string
+          fundamental_score?: number
+          history_score?: number
+          id?: string
+          ltp?: number | null
+          macro_score?: number
+          monthly_score?: number
+          name?: string | null
+          reasoning?: Json | null
+          rs_score?: number
+          run_id?: string | null
+          sector?: string | null
+          sector_score?: number
+          status?: string
+          swing_score?: number
+          symbol?: string
+          volume_score?: number
+          weekly_score?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rankings_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "agent_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stock_universe: {
+        Row: {
+          active: boolean
+          created_at: string
+          exchange: string
+          id: string
+          name: string
+          sector: string
+          symbol: string
+          yahoo_symbol: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          exchange?: string
+          id?: string
+          name: string
+          sector: string
+          symbol: string
+          yahoo_symbol: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          exchange?: string
+          id?: string
+          name?: string
+          sector?: string
+          symbol?: string
+          yahoo_symbol?: string
+        }
+        Relationships: []
+      }
       training_examples: {
         Row: {
           created_at: string
+          features: Json | null
           id: string
           image_path: string
           label: string
           note: string | null
           sector: string | null
           symbol: string | null
+          tags: string[] | null
         }
         Insert: {
           created_at?: string
+          features?: Json | null
           id?: string
           image_path: string
           label?: string
           note?: string | null
           sector?: string | null
           symbol?: string | null
+          tags?: string[] | null
         }
         Update: {
           created_at?: string
+          features?: Json | null
           id?: string
           image_path?: string
           label?: string
           note?: string | null
           sector?: string | null
           symbol?: string | null
+          tags?: string[] | null
         }
         Relationships: []
       }

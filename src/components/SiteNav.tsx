@@ -15,6 +15,7 @@ export function SiteNav() {
         <nav className="hidden items-center gap-1 text-sm md:flex">
           {[
             { to: "/dashboard", label: "Dashboard" },
+            { to: "/research", label: "Research" },
             { to: "/agents", label: "AI Agents" },
             { to: "/sectors", label: "Sectors" },
             { to: "/training", label: "Training Lab" },
