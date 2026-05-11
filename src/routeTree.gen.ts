@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TrainingRouteImport } from './routes/training'
 import { Route as ResearchRouteImport } from './routes/research'
+import { Route as PicksRouteImport } from './routes/picks'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as AgentsRouteImport } from './routes/agents'
 import { Route as IndexRouteImport } from './routes/index'
@@ -26,6 +27,11 @@ const TrainingRoute = TrainingRouteImport.update({
 const ResearchRoute = ResearchRouteImport.update({
   id: '/research',
   path: '/research',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PicksRoute = PicksRouteImport.update({
+  id: '/picks',
+  path: '/picks',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardRoute = DashboardRouteImport.update({
@@ -63,6 +69,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
   '/dashboard': typeof DashboardRoute
+  '/picks': typeof PicksRoute
   '/research': typeof ResearchRoute
   '/training': typeof TrainingRoute
   '/sectors/$sectorId': typeof SectorsSectorIdRoute
@@ -73,6 +80,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
   '/dashboard': typeof DashboardRoute
+  '/picks': typeof PicksRoute
   '/research': typeof ResearchRoute
   '/training': typeof TrainingRoute
   '/sectors/$sectorId': typeof SectorsSectorIdRoute
@@ -84,6 +92,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
   '/dashboard': typeof DashboardRoute
+  '/picks': typeof PicksRoute
   '/research': typeof ResearchRoute
   '/training': typeof TrainingRoute
   '/sectors/$sectorId': typeof SectorsSectorIdRoute
@@ -96,6 +105,7 @@ export interface FileRouteTypes {
     | '/'
     | '/agents'
     | '/dashboard'
+    | '/picks'
     | '/research'
     | '/training'
     | '/sectors/$sectorId'
@@ -106,6 +116,7 @@ export interface FileRouteTypes {
     | '/'
     | '/agents'
     | '/dashboard'
+    | '/picks'
     | '/research'
     | '/training'
     | '/sectors/$sectorId'
@@ -116,6 +127,7 @@ export interface FileRouteTypes {
     | '/'
     | '/agents'
     | '/dashboard'
+    | '/picks'
     | '/research'
     | '/training'
     | '/sectors/$sectorId'
@@ -127,6 +139,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AgentsRoute: typeof AgentsRoute
   DashboardRoute: typeof DashboardRoute
+  PicksRoute: typeof PicksRoute
   ResearchRoute: typeof ResearchRoute
   TrainingRoute: typeof TrainingRoute
   SectorsSectorIdRoute: typeof SectorsSectorIdRoute
@@ -148,6 +161,13 @@ declare module '@tanstack/react-router' {
       path: '/research'
       fullPath: '/research'
       preLoaderRoute: typeof ResearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/picks': {
+      id: '/picks'
+      path: '/picks'
+      fullPath: '/picks'
+      preLoaderRoute: typeof PicksRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard': {
@@ -199,6 +219,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AgentsRoute: AgentsRoute,
   DashboardRoute: DashboardRoute,
+  PicksRoute: PicksRoute,
   ResearchRoute: ResearchRoute,
   TrainingRoute: TrainingRoute,
   SectorsSectorIdRoute: SectorsSectorIdRoute,
