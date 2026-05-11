@@ -183,6 +183,32 @@ function TrainingLab() {
               <Upload className="h-4 w-4" /> {busy ? "Saving…" : "Save example"}
             </button>
             {msg && <div className="mt-3 text-xs text-muted-foreground">{msg}</div>}
+            {lastExtract && (
+              <div className="mt-4 rounded-lg border border-primary/30 bg-primary/5 p-3">
+                <div className="flex items-center gap-2 text-[11px] font-mono uppercase text-primary">
+                  <Sparkles className="h-3 w-3" /> AI extracted from this chart
+                </div>
+                {lastExtract.summary && (
+                  <p className="mt-2 text-xs text-foreground">{lastExtract.summary}</p>
+                )}
+                <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
+                  <div className="flex items-center gap-1.5"><TrendingUp className="h-3 w-3 text-primary" /><span className="text-muted-foreground">Monthly:</span> <b>{lastExtract.monthly_trend}</b></div>
+                  <div className="flex items-center gap-1.5"><Activity className="h-3 w-3 text-primary" /><span className="text-muted-foreground">Weekly:</span> <b>{lastExtract.weekly_structure?.replace(/_/g, " ")}</b></div>
+                  <div className="flex items-center gap-1.5"><Activity className="h-3 w-3 text-primary" /><span className="text-muted-foreground">Volume:</span> <b>{lastExtract.volume_behavior?.replace(/_/g, " ")}</b></div>
+                  <div className="flex items-center gap-1.5"><Gauge className="h-3 w-3 text-primary" /><span className="text-muted-foreground">Quality:</span> <b>{lastExtract.quality}/100</b></div>
+                </div>
+                {lastExtract.tags && lastExtract.tags.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {lastExtract.tags.map((t) => (
+                      <span key={t} className="rounded border border-border bg-card px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">{t}</span>
+                    ))}
+                  </div>
+                )}
+                <div className="mt-2 text-[10px] text-muted-foreground">
+                  ✓ Sent to the pattern-matching agent — every NSE/BSE scan now compares against this example.
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Library */}
