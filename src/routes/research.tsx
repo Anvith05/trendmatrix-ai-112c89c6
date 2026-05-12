@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { SiteNav } from "@/components/SiteNav";
 import { Ticker } from "@/components/Ticker";
 import { getQuote, searchUniverse } from "@/lib/market.functions";
+import { extractTrainingFeatures } from "@/lib/training.functions";
 import { supabase } from "@/integrations/supabase/client";
-import { Search, TrendingUp, TrendingDown, Activity, Loader2 } from "lucide-react";
+import { Search, TrendingUp, TrendingDown, Activity, Loader2, Upload, Brain, Sparkles } from "lucide-react";
 
 export const Route = createFileRoute("/research")({
   component: Research,
