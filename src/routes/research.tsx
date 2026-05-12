@@ -60,6 +60,52 @@ function Research() {
   const [matches, setMatches] = useState<Match[]>([]);
   const fetchQuote = useServerFn(getQuote);
   const search = useServerFn(searchUniverse);
+  const extract = useServerFn(extractTrainingFeatures);
+
+  // Teach-AI uploader state (scoped to currently-loaded stock)
+  const [teachFile, setTeachFile] = useState<File | null>(null);
+  const [teachPreview, setTeachPreview] = useState<string | null>(null);
+  const [teachLabel, setTeachLabel] = useState("successful_breakout");
+  const [teachNote, setTeachNote] = useState("");
+  const [teachBusy, setTeachBusy] = useState(false);
+  const [teachMsg, setTeachMsg] = useState<string | null>(null);
+  const teachFileRef = useRef<HTMLInputElement>(null);
+
+  function pickTeachFile(f: File | null) {
+    setTeachFile(f);
+    setTeachPreview(f ? URL.createObjectURL(f) : null);
+  }
+
+  async function teachAI() {
+    if (!teachFile || !quote) return;
+    setTeachBusy(true); setTeachMsg(null);
+    try {
+      const ext = teachFile.name.split(".").pop() ?? "png";
+      const path = `${crypto.randomUUID()}.${ext}`;
+      const up = await supabase.storage.from("training-charts").upload(path, teachFile, { contentType: teachFile.type });
+      if (up.error) throw up.error;
+      const ins = await supabase.from("training_examples").insert({
+        image_path: path, label: teachLabel,
+        note: teachNote || null,
+        symbol: quote.symbol, sector: quote.sector,
+      }).select().single();
+      if (ins.error) throw ins.error;
+      setTeachMsg("Saved · AI is reading the chart…");
+      try {
+        await extract({ data: { id: ins.data.id } });
+        setTeachMsg("✓ Indexed — pattern-matching agent now uses this example.");
+      } catch (e: any) {
+        setTeachMsg(`Saved (vision extract failed: ${e?.message ?? e})`);
+      }
+      setTeachFile(null); setTeachPreview(null); setTeachNote("");
+      if (teachFileRef.current) teachFileRef.current.value = "";
+    } catch (e: any) {
+      setTeachMsg(e?.message ?? "Upload failed");
+    } finally {
+      setTeachBusy(false);
+    }
+  }
+
 
   useEffect(() => {
     let active = true;
