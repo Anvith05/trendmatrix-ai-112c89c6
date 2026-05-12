@@ -229,12 +229,32 @@ export const runAgents = createServerFn({ method: "POST" })
       if (rows.length) await supabaseAdmin.from("rankings").insert(rows);
 
       // === Strong recommendations pipeline ===
-      // 1) Archive expired active recommendations
+      // 1a) Archive expired active recommendations (time-based)
       await supabaseAdmin
         .from("recommendations")
         .update({ status: "historical", archived_at: new Date().toISOString(), outcome: "expired" })
         .eq("status", "active")
         .lt("expires_at", new Date().toISOString());
+
+      // 1b) Archive picks that have run more than +10% above their entry
+      //     (breakout line) — too extended, no longer a clean entry.
+      const breakoutBySymbol = new Map(results.map((x) => [x.u.symbol, x.breakout]));
+      const { data: liveActive } = await supabaseAdmin
+        .from("recommendations").select("id, symbol, entry_price, ltp")
+        .eq("status", "active");
+      const extendedIds: string[] = [];
+      for (const row of liveActive ?? []) {
+        const br = breakoutBySymbol.get(row.symbol);
+        const ref = Number(row.entry_price ?? br?.breakout_price ?? 0);
+        const r = results.find((x) => x.u.symbol === row.symbol);
+        const last = r?.q?.ltp ?? Number(row.ltp ?? 0);
+        if (ref > 0 && last > 0 && ((last - ref) / ref) * 100 > 10) extendedIds.push(row.id);
+      }
+      if (extendedIds.length) {
+        await supabaseAdmin.from("recommendations")
+          .update({ status: "historical", archived_at: new Date().toISOString(), outcome: "extended" })
+          .in("id", extendedIds);
+      }
 
       // 2) Pick top breakout candidates — must (a) match a training pattern,
       //    (b) have actually broken out of a base in the last ~3 weeks, and
