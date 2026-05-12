@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { SiteNav } from "@/components/SiteNav";
 import { Ticker } from "@/components/Ticker";
-import { getRecommendations, runAgents } from "@/lib/market.functions";
+import { getQuote, getRecommendations, runAgents } from "@/lib/market.functions";
 import { Sparkles, History, TrendingUp, Loader2, RefreshCw, ArrowRight } from "lucide-react";
 
 export const Route = createFileRoute("/picks")({
