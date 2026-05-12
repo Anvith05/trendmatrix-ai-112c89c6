@@ -259,6 +259,64 @@ function Research() {
               </div>
             </div>
 
+            {/* Teach AI from this stock */}
+            <div className="rounded-xl glass p-5">
+              <div className="mb-1 flex items-center gap-2 text-sm font-semibold">
+                <Brain className="h-4 w-4 text-primary" />
+                Teach the AI a pattern from {quote.symbol}
+              </div>
+              <p className="mb-3 text-xs text-muted-foreground">
+                See a clean setup on this chart? Upload a screenshot and the AI will extract its features and add it to your training library — every future scan will compare stocks against it.
+              </p>
+              <div className="grid gap-3 md:grid-cols-[180px_1fr]">
+                <label className="flex aspect-video cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-card/40 transition hover:border-primary/60">
+                  {teachPreview ? (
+                    <img src={teachPreview} alt="preview" className="h-full w-full rounded-lg object-contain" />
+                  ) : (
+                    <div className="text-center">
+                      <Upload className="mx-auto h-6 w-6 text-muted-foreground" />
+                      <div className="mt-1 text-[11px] text-muted-foreground">Chart screenshot</div>
+                    </div>
+                  )}
+                  <input ref={teachFileRef} type="file" accept="image/*" className="hidden"
+                    onChange={(e) => pickTeachFile(e.target.files?.[0] ?? null)} />
+                </label>
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] font-mono uppercase text-muted-foreground">Label</label>
+                      <select value={teachLabel} onChange={(e) => setTeachLabel(e.target.value)}
+                        className="mt-1 w-full rounded-md border border-border bg-card px-2 py-1.5 text-xs">
+                        <option value="successful_breakout">Successful breakout</option>
+                        <option value="failed_breakout">Failed breakout</option>
+                        <option value="accumulation">Accumulation</option>
+                        <option value="weekly_consolidation">Weekly consolidation</option>
+                        <option value="momentum_expansion">Momentum expansion</option>
+                        <option value="sector_rally">Sector rally</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-mono uppercase text-muted-foreground">Auto-tagged</label>
+                      <div className="mt-1 truncate rounded-md border border-border bg-card px-2 py-1.5 font-mono text-xs text-muted-foreground">
+                        {quote.symbol} · {quote.sector}
+                      </div>
+                    </div>
+                  </div>
+                  <textarea value={teachNote} onChange={(e) => setTeachNote(e.target.value)} rows={2}
+                    placeholder="Note for the AI: what makes this setup interesting?"
+                    className="w-full rounded-md border border-border bg-card px-2 py-1.5 text-xs" />
+                  <div className="flex items-center gap-3">
+                    <button onClick={teachAI} disabled={teachBusy || !teachFile}
+                      className="inline-flex items-center gap-2 rounded-md bg-[var(--gradient-primary)] px-3 py-1.5 text-xs font-semibold text-primary-foreground glow disabled:opacity-50">
+                      {teachBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                      {teachBusy ? "Saving…" : "Teach the AI"}
+                    </button>
+                    {teachMsg && <div className="text-[11px] text-muted-foreground">{teachMsg}</div>}
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Training matches */}
             {matches.length > 0 && (
               <div className="rounded-xl glass p-5">
