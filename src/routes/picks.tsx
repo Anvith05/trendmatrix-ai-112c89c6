@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { SiteNav } from "@/components/SiteNav";
 import { Ticker } from "@/components/Ticker";
-import { getRecommendations, runAgents } from "@/lib/market.functions";
+import { getQuote, getRecommendations, runAgents } from "@/lib/market.functions";
 import { Sparkles, History, TrendingUp, Loader2, RefreshCw, ArrowRight } from "lucide-react";
 
 export const Route = createFileRoute("/picks")({
@@ -179,6 +179,8 @@ function PickCard({ r }: { r: Rec }) {
         <span className="ml-auto text-[10px] font-mono text-muted-foreground">{timeLeft(r.expires_at)}</span>
       </div>
 
+      <PickChart symbol={r.symbol} entry={Number(r.entry_price ?? 0)} />
+
       <div className="mt-3 space-y-1.5">
         {bars.map(([k, v]) => (
           <div key={k}>
@@ -203,6 +205,83 @@ function PickCard({ r }: { r: Rec }) {
       <Link to="/research" className="mt-3 flex items-center justify-end gap-1 text-xs text-primary hover:underline">
         Open in Research <ArrowRight className="h-3 w-3" />
       </Link>
+    </div>
+  );
+}
+
+function PickChart({ symbol, entry }: { symbol: string; entry: number }) {
+  const fetchQuote = useServerFn(getQuote);
+  const [candles, setCandles] = useState<{ t: number; c: number; h: number; l: number }[] | null>(null);
+  const [err, setErr] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    fetchQuote({ data: { symbol } })
+      .then((q: any) => { if (alive) setCandles((q?.candles ?? []).slice(-90)); })
+      .catch(() => { if (alive) setErr(true); });
+    return () => { alive = false; };
+  }, [symbol]);
+
+  if (err) return <div className="mt-3 h-24 rounded-md bg-secondary/30 text-[10px] text-muted-foreground flex items-center justify-center">chart unavailable</div>;
+  if (!candles) return <div className="mt-3 h-24 animate-pulse rounded-md bg-secondary/40" />;
+  if (candles.length < 5) return null;
+
+  const W = 320, H = 96, P = 4;
+  const closes = candles.map((c) => c.c);
+  const highs = candles.map((c) => c.h);
+  const lows = candles.map((c) => c.l);
+  const minP = Math.min(...lows, entry);
+  const maxP = Math.max(...highs, entry);
+  const span = Math.max(0.0001, maxP - minP);
+  const x = (i: number) => P + (i / (candles.length - 1)) * (W - 2 * P);
+  const y = (p: number) => P + (1 - (p - minP) / span) * (H - 2 * P);
+
+  // Detect consolidation / base on the most recent window: tight range = base
+  const winN = Math.min(20, candles.length);
+  const winStart = candles.length - winN;
+  const winHighs = highs.slice(winStart);
+  const winLows = lows.slice(winStart);
+  const winHi = Math.max(...winHighs);
+  const winLo = Math.min(...winLows);
+  const winMid = (winHi + winLo) / 2;
+  const rangePct = ((winHi - winLo) / winMid) * 100;
+  const isBase = rangePct < 12; // tight range threshold
+
+  const path = closes.map((c, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(c).toFixed(1)}`).join(" ");
+  const area = `${path} L${x(closes.length - 1).toFixed(1)},${(H - P).toFixed(1)} L${x(0).toFixed(1)},${(H - P).toFixed(1)} Z`;
+  const entryY = y(entry);
+
+  return (
+    <div className="mt-3">
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-24 w-full overflow-visible rounded-md bg-secondary/20">
+        {isBase && (
+          <>
+            <rect
+              x={x(winStart)}
+              y={y(winHi)}
+              width={x(candles.length - 1) - x(winStart)}
+              height={Math.max(2, y(winLo) - y(winHi))}
+              fill="hsl(var(--primary) / 0.12)"
+              stroke="hsl(var(--primary) / 0.45)"
+              strokeDasharray="3 2"
+            />
+            <text x={x(winStart) + 4} y={y(winHi) - 2} className="fill-primary" fontSize="9" fontFamily="monospace">
+              base · {rangePct.toFixed(1)}%
+            </text>
+          </>
+        )}
+        <path d={area} fill="hsl(var(--primary) / 0.10)" />
+        <path d={path} fill="none" stroke="hsl(var(--primary))" strokeWidth="1.5" />
+        {/* Entry line */}
+        <line x1={P} x2={W - P} y1={entryY} y2={entryY} stroke="hsl(var(--success))" strokeWidth="1" strokeDasharray="4 3" />
+        <text x={W - P - 2} y={entryY - 3} textAnchor="end" className="fill-success" fontSize="9" fontFamily="monospace">
+          entry ₹{entry.toFixed(2)}
+        </text>
+      </svg>
+      <div className="mt-1 flex items-center justify-between text-[10px] font-mono text-muted-foreground">
+        <span>{isBase ? "Consolidation detected" : "Trend leg"}</span>
+        <span>last {candles.length}d</span>
+      </div>
     </div>
   );
 }
