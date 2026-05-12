@@ -193,7 +193,8 @@ export const runAgents = createServerFn({ method: "POST" })
         const tags = autoTags(m.score, w.score, v.score, r.score);
         const structure = deriveStructure(m.score, w.score, v.score);
         const history = patternMatchScore(tags, structure, lib);
-        results.push({ u, q, m, w, v, r, f, history, tags });
+        const breakout = detectBreakout(q.candles);
+        results.push({ u, q, m, w, v, r, f, history, tags, breakout });
       }
 
       // Sector aggregates
