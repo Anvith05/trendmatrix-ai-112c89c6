@@ -104,6 +104,39 @@ export function combine(s: Omit<AgentScores, "swing" | "status">): AgentScores {
   return { ...s, swing, status };
 }
 
+// Detect a recent breakout from a consolidation base.
+// Returns the breakout reference price (prior range high), whether price is
+// currently within +10% of it (entry window), how far above (pct), and whether
+// a breakout actually happened in the last `recent` bars.
+export function detectBreakout(candles: Candle[], lookback = 40, recent = 15): {
+  breakout_price: number;
+  pct_above: number;
+  in_window: boolean;
+  broke_out: boolean;
+  bars_since: number;
+} {
+  if (candles.length < lookback + recent + 5) {
+    return { breakout_price: 0, pct_above: 0, in_window: false, broke_out: false, bars_since: -1 };
+  }
+  // Reference range = highs from (len - recent - lookback) to (len - recent)
+  const baseStart = candles.length - recent - lookback;
+  const baseEnd = candles.length - recent;
+  let baseHigh = 0;
+  for (let i = baseStart; i < baseEnd; i++) baseHigh = Math.max(baseHigh, candles[i].h);
+  // First bar in the recent window whose close pierced baseHigh
+  let bars_since = -1;
+  for (let i = baseEnd; i < candles.length; i++) {
+    if (candles[i].c > baseHigh) { bars_since = candles.length - 1 - i; break; }
+  }
+  const last = candles[candles.length - 1].c;
+  const pct_above = baseHigh ? ((last - baseHigh) / baseHigh) * 100 : 0;
+  const broke_out = bars_since >= 0;
+  // Entry window: price is currently between breakout line and +10% (covers
+  // initial breakout AND retests that pull back into the zone).
+  const in_window = broke_out && pct_above >= -1 && pct_above <= 10;
+  return { breakout_price: baseHigh, pct_above, in_window, broke_out, bars_since };
+}
+
 export function scoreMacro(benchmark: Candle[]): number {
   if (benchmark.length < 60) return 60;
   const closes = benchmark.map((c) => c.c);

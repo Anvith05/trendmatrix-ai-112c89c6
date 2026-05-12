@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { fetchYahooChart } from "./yahoo.server";
 import {
-  combine, scoreFundamental, scoreMacro, scoreMonthly, scoreRS, scoreVolume, scoreWeekly,
+  combine, detectBreakout, scoreFundamental, scoreMacro, scoreMonthly, scoreRS, scoreVolume, scoreWeekly,
 } from "./agents.server";
 
 const CACHE_TTL_MS = 60 * 1000; // 1 min
@@ -193,7 +193,8 @@ export const runAgents = createServerFn({ method: "POST" })
         const tags = autoTags(m.score, w.score, v.score, r.score);
         const structure = deriveStructure(m.score, w.score, v.score);
         const history = patternMatchScore(tags, structure, lib);
-        results.push({ u, q, m, w, v, r, f, history, tags });
+        const breakout = detectBreakout(q.candles);
+        results.push({ u, q, m, w, v, r, f, history, tags, breakout });
       }
 
       // Sector aggregates
@@ -228,14 +229,38 @@ export const runAgents = createServerFn({ method: "POST" })
       if (rows.length) await supabaseAdmin.from("rankings").insert(rows);
 
       // === Strong recommendations pipeline ===
-      // 1) Archive expired active recommendations
+      // 1a) Archive expired active recommendations (time-based)
       await supabaseAdmin
         .from("recommendations")
         .update({ status: "historical", archived_at: new Date().toISOString(), outcome: "expired" })
         .eq("status", "active")
         .lt("expires_at", new Date().toISOString());
 
-      // 2) Pick top breakout candidates (must match a training pattern)
+      // 1b) Archive picks that have run more than +10% above their entry
+      //     (breakout line) — too extended, no longer a clean entry.
+      const breakoutBySymbol = new Map(results.map((x) => [x.u.symbol, x.breakout]));
+      const { data: liveActive } = await supabaseAdmin
+        .from("recommendations").select("id, symbol, entry_price, ltp")
+        .eq("status", "active");
+      const extendedIds: string[] = [];
+      for (const row of liveActive ?? []) {
+        const br = breakoutBySymbol.get(row.symbol);
+        const ref = Number(row.entry_price ?? br?.breakout_price ?? 0);
+        const r = results.find((x) => x.u.symbol === row.symbol);
+        const last = r?.q?.ltp ?? Number(row.ltp ?? 0);
+        if (ref > 0 && last > 0 && ((last - ref) / ref) * 100 > 10) extendedIds.push(row.id);
+      }
+      if (extendedIds.length) {
+        await supabaseAdmin.from("recommendations")
+          .update({ status: "historical", archived_at: new Date().toISOString(), outcome: "extended" })
+          .in("id", extendedIds);
+      }
+
+      // 2) Pick top breakout candidates — must (a) match a training pattern,
+      //    (b) have actually broken out of a base in the last ~3 weeks, and
+      //    (c) still trade within +10% of the breakout line (initial breakout
+      //    or pullback/retest). Anything extended >10% above the line is
+      //    skipped — too late to enter.
       const candidates = results
         .map((x) => {
           const sector = sectorScore[x.u.sector] ?? 60;
@@ -244,15 +269,21 @@ export const runAgents = createServerFn({ method: "POST" })
             fundamental: x.f.score, macro, rs: x.r.score, volume: x.v.score,
             reasoning: { monthly: x.m.reason, weekly: x.w.reason, volume: x.v.reason, rs: x.r.reason, fundamental: x.f.reason },
           } as any);
-          return { x, s };
+          // Composite quality: weight conviction, pattern match and volume
+          const quality = s.swing * 0.5 + x.history * 0.3 + x.v.score * 0.2;
+          return { x, s, quality };
         })
-        .filter(({ s, x }) =>
-          s.swing >= 78 &&
-          x.history >= 65 &&
-          (s.status === "breaking_out" || s.status === "basing") &&
+        .filter(({ s, x, quality }) =>
+          x.breakout.in_window &&                  // within breakout → +10% zone
+          x.breakout.bars_since <= 25 &&           // breakout is recent
+          s.swing >= 75 &&
+          x.history >= 70 &&                       // strong pattern match required
+          x.m.score >= 65 &&                       // monthly trend up
+          x.v.score >= 60 &&                       // volume confirming
+          quality >= 72 &&
           x.tags.length > 0,
         )
-        .sort((a, b) => b.s.swing - a.s.swing)
+        .sort((a, b) => b.quality - a.quality)
         .slice(0, 5);
 
       // 3) Fetch currently-active symbols to avoid duplicates
@@ -264,10 +295,17 @@ export const runAgents = createServerFn({ method: "POST" })
         .filter(({ x }) => !activeSet.has(x.u.symbol))
         .map(({ x, s }) => ({
           symbol: x.u.symbol, name: x.u.name, sector: x.u.sector,
-          ltp: x.q.ltp, entry_price: x.q.ltp,
+          ltp: x.q.ltp,
+          // Entry = breakout line (price will revisit this on a retest)
+          entry_price: Number(x.breakout.breakout_price.toFixed(2)),
           swing_score: s.swing, monthly_score: s.monthly, weekly_score: s.weekly,
           history_score: s.history, volume_score: s.volume, rs_score: s.rs,
-          tags: x.tags, reasoning: s.reasoning, status: "active",
+          tags: x.tags,
+          reasoning: {
+            ...s.reasoning,
+            breakout: `Broke out ${x.breakout.bars_since}d ago from ₹${x.breakout.breakout_price.toFixed(2)}; now ${x.breakout.pct_above >= 0 ? "+" : ""}${x.breakout.pct_above.toFixed(1)}% above.`,
+          },
+          status: "active",
         }));
       if (newPicks.length) await supabaseAdmin.from("recommendations").insert(newPicks);
 
