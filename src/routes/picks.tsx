@@ -179,6 +179,8 @@ function PickCard({ r }: { r: Rec }) {
         <span className="ml-auto text-[10px] font-mono text-muted-foreground">{timeLeft(r.expires_at)}</span>
       </div>
 
+      <PickChart symbol={r.symbol} entry={Number(r.entry_price ?? 0)} />
+
       <div className="mt-3 space-y-1.5">
         {bars.map(([k, v]) => (
           <div key={k}>
