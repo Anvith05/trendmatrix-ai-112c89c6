@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { fetchYahooChart } from "./yahoo.server";
 import {
-  combine, scoreFundamental, scoreMacro, scoreMonthly, scoreRS, scoreVolume, scoreWeekly,
+  combine, detectBreakout, scoreFundamental, scoreMacro, scoreMonthly, scoreRS, scoreVolume, scoreWeekly,
 } from "./agents.server";
 
 const CACHE_TTL_MS = 60 * 1000; // 1 min
