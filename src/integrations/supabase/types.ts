@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_feedback: {
+        Row: {
+          agent: string
+          context: Json | null
+          created_at: string
+          id: string
+          message: string
+          role: string
+        }
+        Insert: {
+          agent: string
+          context?: Json | null
+          created_at?: string
+          id?: string
+          message: string
+          role: string
+        }
+        Update: {
+          agent?: string
+          context?: Json | null
+          created_at?: string
+          id?: string
+          message?: string
+          role?: string
+        }
+        Relationships: []
+      }
       agent_runs: {
         Row: {
           error: string | null
@@ -152,6 +179,8 @@ export type Database = {
           outcome: string | null
           reasoning: Json | null
           recommended_at: string
+          removed_image_path: string | null
+          removed_reason: string | null
           rs_score: number
           sector: string | null
           status: string
@@ -173,6 +202,8 @@ export type Database = {
           outcome?: string | null
           reasoning?: Json | null
           recommended_at?: string
+          removed_image_path?: string | null
+          removed_reason?: string | null
           rs_score?: number
           sector?: string | null
           status?: string
@@ -194,6 +225,8 @@ export type Database = {
           outcome?: string | null
           reasoning?: Json | null
           recommended_at?: string
+          removed_image_path?: string | null
+          removed_reason?: string | null
           rs_score?: number
           sector?: string | null
           status?: string
