@@ -3,7 +3,22 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { fetchYahooChart } from "./yahoo.server";
 import {
   combine, detectBreakout, scoreFundamental, scoreMacro, scoreMonthly, scoreRS, scoreVolume, scoreWeekly,
+  TOP_PICK_SWING_THRESHOLD,
 } from "./agents.server";
+
+// Load human-curated rules captured in agent_feedback (role='rule' or
+// role='user') for a given agent. Returns text snippets the AI / scoring
+// can consult.
+async function loadAgentRules(agent: string): Promise<string[]> {
+  const { data } = await supabaseAdmin
+    .from("agent_feedback")
+    .select("message, role")
+    .eq("agent", agent)
+    .in("role", ["rule", "user"])
+    .order("created_at", { ascending: false })
+    .limit(20);
+  return (data ?? []).map((r) => r.message);
+}
 
 const CACHE_TTL_MS = 60 * 1000; // 1 min
 const NIFTY = "^NSEI";
@@ -261,6 +276,8 @@ export const runAgents = createServerFn({ method: "POST" })
       //    (c) still trade within +10% of the breakout line (initial breakout
       //    or pullback/retest). Anything extended >10% above the line is
       //    skipped — too late to enter.
+      //    Macro and historical-pattern scores are EXCLUDED from selection
+      //    (info-only) per user requirement.
       const candidates = results
         .map((x) => {
           const sector = sectorScore[x.u.sector] ?? 60;
@@ -269,18 +286,18 @@ export const runAgents = createServerFn({ method: "POST" })
             fundamental: x.f.score, macro, rs: x.r.score, volume: x.v.score,
             reasoning: { monthly: x.m.reason, weekly: x.w.reason, volume: x.v.reason, rs: x.r.reason, fundamental: x.f.reason },
           } as any);
-          // Composite quality: weight conviction, pattern match and volume
-          const quality = s.swing * 0.5 + x.history * 0.3 + x.v.score * 0.2;
+          // Composite quality (no macro, no history): swing + volume + weekly base
+          const quality = s.swing * 0.7 + x.v.score * 0.2 + x.w.score * 0.1;
           return { x, s, quality };
         })
         .filter(({ s, x, quality }) =>
           x.breakout.in_window &&                  // within breakout → +10% zone
           x.breakout.bars_since <= 25 &&           // breakout is recent
-          s.swing >= 75 &&
-          x.history >= 70 &&                       // strong pattern match required
-          x.m.score >= 65 &&                       // monthly trend up
-          x.v.score >= 60 &&                       // volume confirming
-          quality >= 72 &&
+          s.swing >= TOP_PICK_SWING_THRESHOLD &&   // 70+ swing
+          x.m.score >= 60 &&                       // monthly trend up
+          x.w.score >= 55 &&                       // some base structure
+          x.v.score >= 55 &&                       // volume not drying badly
+          quality >= 68 &&
           x.tags.length > 0,
         )
         .sort((a, b) => b.quality - a.quality)
