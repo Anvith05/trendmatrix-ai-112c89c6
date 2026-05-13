@@ -379,3 +379,121 @@ export const getRecommendations = createServerFn({ method: "GET" }).handler(asyn
     .order("archived_at", { ascending: false }).limit(50);
   return { active: active ?? [], history: history ?? [] };
 });
+
+export const TOP_PICK_THRESHOLD = TOP_PICK_SWING_THRESHOLD;
+
+// User removes a pick → archive with reason + optional uploaded chart.
+// The screenshot becomes a 'failed_breakout' training example so the AI
+// doesn't repeat the same mistake.
+export const removePick = createServerFn({ method: "POST" })
+  .inputValidator((d: { id: string; reason: string; image_path?: string }) => d)
+  .handler(async ({ data }) => {
+    const { data: rec } = await supabaseAdmin
+      .from("recommendations").select("*").eq("id", data.id).single();
+    if (!rec) throw new Error("not found");
+
+    await supabaseAdmin.from("recommendations").update({
+      status: "historical",
+      archived_at: new Date().toISOString(),
+      outcome: "user_removed",
+      removed_reason: data.reason,
+      removed_image_path: data.image_path ?? null,
+    }).eq("id", data.id);
+
+    if (data.image_path) {
+      await supabaseAdmin.from("training_examples").insert({
+        image_path: data.image_path,
+        label: "failed_breakout",
+        symbol: rec.symbol, sector: rec.sector,
+        note: `User removed pick · reason: ${data.reason}`,
+      });
+    }
+    await supabaseAdmin.from("agent_feedback").insert({
+      agent: "weekly_consolidation",
+      role: "rule",
+      message: `Avoid lookalikes of ${rec.symbol} (${rec.sector}). Reason: ${data.reason}`,
+      context: { symbol: rec.symbol, sector: rec.sector, swing_score: rec.swing_score },
+    });
+    return { ok: true };
+  });
+
+export const getAgentChat = createServerFn({ method: "GET" })
+  .inputValidator((d: { agent: string }) => d)
+  .handler(async ({ data }) => {
+    const { data: rows } = await supabaseAdmin
+      .from("agent_feedback").select("*")
+      .eq("agent", data.agent)
+      .order("created_at", { ascending: true })
+      .limit(100);
+    return rows ?? [];
+  });
+
+export const sendAgentChat = createServerFn({ method: "POST" })
+  .inputValidator((d: { agent: string; message: string }) => d)
+  .handler(async ({ data }) => {
+    const LOVABLE_API_KEY = process.env.LOVABLE_API_KEY;
+    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY missing");
+
+    await supabaseAdmin.from("agent_feedback").insert({
+      agent: data.agent, role: "user", message: data.message,
+    });
+
+    const { data: history } = await supabaseAdmin
+      .from("agent_feedback").select("role, message")
+      .eq("agent", data.agent)
+      .order("created_at", { ascending: true })
+      .limit(40);
+
+    const system = `You are the ${data.agent.replace(/_/g, " ")} agent for an Indian-equities swing-trading AI.
+Your job is to detect tight multi-week / multi-month consolidation bases and the moment price breaks out of them.
+The user is teaching you. Listen carefully to mistakes (e.g. "you missed ADANIPORTS — long flat base, breakout at 1600").
+Reply concisely (max 6 lines): (1) what you understood, (2) the new rule you'll apply, (3) one concrete heuristic / threshold change.
+End with a single line:
+RULE: <one-line rule the scoring engine should remember>`;
+
+    const messages = [
+      { role: "system", content: system },
+      ...(history ?? [])
+        .filter((h) => h.role === "user" || h.role === "assistant")
+        .map((h) => ({ role: h.role, content: h.message })),
+    ];
+
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "google/gemini-2.5-flash", messages }),
+    });
+    if (!res.ok) {
+      const t = await res.text();
+      throw new Error(`AI gateway ${res.status}: ${t.slice(0, 200)}`);
+    }
+    const json: any = await res.json();
+    const reply: string = json.choices?.[0]?.message?.content ?? "(no reply)";
+
+    await supabaseAdmin.from("agent_feedback").insert({
+      agent: data.agent, role: "assistant", message: reply,
+    });
+    const ruleMatch = reply.match(/RULE:\s*(.+)/i);
+    if (ruleMatch) {
+      await supabaseAdmin.from("agent_feedback").insert({
+        agent: data.agent, role: "rule", message: ruleMatch[1].trim(),
+      });
+    }
+    return { reply };
+  });
+
+export const getCategoryStocks = createServerFn({ method: "GET" })
+  .inputValidator((d: { category: "bullish_monthly" | "weekly_consolidation" | "synced_sector" | "high_conviction" }) => d)
+  .handler(async ({ data }) => {
+    const { data: lastRun } = await supabaseAdmin
+      .from("agent_runs").select("*").eq("status", "success")
+      .order("finished_at", { ascending: false }).limit(1).maybeSingle();
+    if (!lastRun) return [] as any[];
+    let query = supabaseAdmin.from("rankings").select("*").eq("run_id", lastRun.id);
+    if (data.category === "bullish_monthly")      query = query.gte("monthly_score", 65);
+    if (data.category === "weekly_consolidation") query = query.gte("weekly_score", 70);
+    if (data.category === "synced_sector")        query = query.gte("sector_score", 70);
+    if (data.category === "high_conviction")      query = query.gte("swing_score", TOP_PICK_SWING_THRESHOLD);
+    const { data: rows } = await query.order("swing_score", { ascending: false }).limit(50);
+    return rows ?? [];
+  });
