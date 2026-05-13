@@ -3,9 +3,11 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { SiteNav } from "@/components/SiteNav";
 import { Ticker } from "@/components/Ticker";
-import { getLatestRankings, runAgents } from "@/lib/market.functions";
+import { getCategoryStocks, getLatestRankings, runAgents } from "@/lib/market.functions";
 import { agents, sectors } from "@/lib/mockData";
-import { Activity, TrendingUp, Layers, Radar, RefreshCw, Loader2 } from "lucide-react";
+import { Activity, TrendingUp, Layers, Radar, RefreshCw, Loader2, X, Eye } from "lucide-react";
+
+type Cat = "bullish_monthly" | "weekly_consolidation" | "synced_sector" | "high_conviction";
 
 export const Route = createFileRoute("/dashboard")({
   component: Dashboard,
@@ -15,8 +17,11 @@ export const Route = createFileRoute("/dashboard")({
 function Dashboard() {
   const fetchRankings = useServerFn(getLatestRankings);
   const trigger = useServerFn(runAgents);
+  const fetchCategory = useServerFn(getCategoryStocks);
   const [data, setData] = useState<{ run: any; rankings: any[] }>({ run: null, rankings: [] });
   const [busy, setBusy] = useState(false);
+  const [openCat, setOpenCat] = useState<Cat | null>(null);
+  const [catRows, setCatRows] = useState<any[] | null>(null);
 
   async function load() {
     const r = await fetchRankings({});
@@ -30,11 +35,17 @@ function Dashboard() {
     finally { setBusy(false); }
   }
 
+  async function openCategory(cat: Cat) {
+    setOpenCat(cat); setCatRows(null);
+    const rows = await fetchCategory({ data: { category: cat } });
+    setCatRows(rows as any[]);
+  }
+
   const top = data.rankings.slice(0, 15);
   const sortedSectors = [...sectors].sort((a, b) => b.syncScore - a.syncScore);
   const bullishMonthly = data.rankings.filter((r) => r.monthly_score >= 65).length;
   const tightWeekly = data.rankings.filter((r) => r.weekly_score >= 70).length;
-  const highConv = data.rankings.filter((r) => r.swing_score >= 78).length;
+  const highConv = data.rankings.filter((r) => r.swing_score >= 70).length;
   const syncSectors = new Set(data.rankings.filter((r) => r.sector_score >= 70).map((r) => r.sector)).size;
 
   return (
