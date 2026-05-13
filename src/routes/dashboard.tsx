@@ -75,22 +75,64 @@ function Dashboard() {
         </div>
 
         <div className="grid gap-3 md:grid-cols-4">
-          {[
-            { icon: TrendingUp, label: "Bullish Monthly Trends", val: bullishMonthly, sub: `of ${data.rankings.length} scanned` },
-            { icon: Layers, label: "Weekly Consolidations", val: tightWeekly, sub: "tight bases detected" },
-            { icon: Radar, label: "Synchronized Sectors", val: syncSectors, sub: "rally-priming" },
-            { icon: Activity, label: "Master Conviction", val: highConv, sub: "high-probability setups" },
-          ].map((k) => (
-            <div key={k.label} className="rounded-xl glass p-4">
+          {([
+            { cat: "bullish_monthly" as Cat,      icon: TrendingUp, label: "Bullish Monthly Trends", val: bullishMonthly, sub: `monthly score \u2265 65 \u00b7 of ${data.rankings.length} scanned` },
+            { cat: "weekly_consolidation" as Cat, icon: Layers,     label: "Weekly Consolidations", val: tightWeekly,     sub: "weekly score \u2265 70 (tight base)" },
+            { cat: "synced_sector" as Cat,        icon: Radar,      label: "Synchronized Sectors", val: syncSectors,      sub: "sector score \u2265 70" },
+            { cat: "high_conviction" as Cat,      icon: Activity,   label: "Top Picks Eligible",   val: highConv,         sub: `swing \u2265 70 = top-pick threshold` },
+          ]).map((k) => (
+            <button key={k.label} onClick={() => openCategory(k.cat)}
+              className="group rounded-xl glass p-4 text-left transition hover:border-primary/60">
               <div className="flex items-center justify-between">
                 <span className="text-xs uppercase tracking-wider text-muted-foreground">{k.label}</span>
                 <k.icon className="h-4 w-4 text-primary" />
               </div>
               <div className="mt-2 font-mono text-3xl font-bold text-gradient">{k.val}</div>
-              <div className="text-[11px] text-muted-foreground">{k.sub}</div>
-            </div>
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                <span>{k.sub}</span>
+                <span className="flex items-center gap-1 text-primary opacity-0 transition group-hover:opacity-100"><Eye className="h-3 w-3" /> view</span>
+              </div>
+            </button>
           ))}
         </div>
+
+        {openCat && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur" onClick={() => setOpenCat(null)}>
+            <div onClick={(e) => e.stopPropagation()} className="max-h-[80vh] w-full max-w-3xl overflow-hidden rounded-xl border border-border bg-card shadow-2xl">
+              <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                <div>
+                  <div className="text-xs font-mono uppercase text-primary">{openCat.replace(/_/g, " ")}</div>
+                  <div className="text-sm font-semibold">{catRows ? `${catRows.length} stocks selected` : "Loading…"}</div>
+                </div>
+                <button onClick={() => setOpenCat(null)} className="rounded-md p-2 text-foreground hover:bg-secondary"><X className="h-4 w-4" /></button>
+              </div>
+              <div className="max-h-[68vh] overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-card text-[11px] font-mono uppercase text-muted-foreground">
+                    <tr><th className="px-4 py-2 text-left">Symbol</th><th className="px-4 py-2 text-left">Sector</th>
+                      <th className="px-4 py-2 text-right">M</th><th className="px-4 py-2 text-right">W</th>
+                      <th className="px-4 py-2 text-right">Sec</th><th className="px-4 py-2 text-right">Swing</th></tr>
+                  </thead>
+                  <tbody>
+                    {(catRows ?? []).map((r) => (
+                      <tr key={r.id} className="border-t border-border/50 hover:bg-secondary/30">
+                        <td className="px-4 py-2 font-mono font-semibold">{r.symbol}</td>
+                        <td className="px-4 py-2 text-xs text-muted-foreground">{r.sector}</td>
+                        <td className="px-4 py-2 text-right font-mono">{r.monthly_score}</td>
+                        <td className="px-4 py-2 text-right font-mono">{r.weekly_score}</td>
+                        <td className="px-4 py-2 text-right font-mono">{r.sector_score}</td>
+                        <td className="px-4 py-2 text-right font-mono font-bold text-gradient">{r.swing_score}</td>
+                      </tr>
+                    ))}
+                    {catRows && catRows.length === 0 && (
+                      <tr><td colSpan={6} className="px-4 py-8 text-center text-xs text-muted-foreground">No stocks in this bucket from the latest scan.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="mt-6 grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2 overflow-hidden rounded-xl glass">
