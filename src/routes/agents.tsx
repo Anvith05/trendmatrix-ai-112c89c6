@@ -1,7 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useRef, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { SiteNav } from "@/components/SiteNav";
 import { agents } from "@/lib/mockData";
-import { ChevronRight, Cpu, CheckCircle2, XCircle } from "lucide-react";
+import { getAgentChat, sendAgentChat } from "@/lib/market.functions";
+import { ChevronRight, Cpu, CheckCircle2, XCircle, MessageSquare, Send, Loader2, Sparkles } from "lucide-react";
 
 export const Route = createFileRoute("/agents")({ component: Agents,
   head: () => ({ meta: [{ title: "AI Agent Flow · TrendMatrix AI" }] }),
@@ -96,11 +99,85 @@ function Agents() {
                     <ChevronRight className="h-3 w-3 rotate-90 text-primary" />
                   </div>
                 )}
+                {a.id === "weekly" && <AgentChat agent="weekly_consolidation" />}
               </div>
             );
           })}
         </div>
       </div>
+    </div>
+  );
+}
+
+function AgentChat({ agent }: { agent: string }) {
+  const fetchChat = useServerFn(getAgentChat);
+  const send = useServerFn(sendAgentChat);
+  const [open, setOpen] = useState(false);
+  const [msgs, setMsgs] = useState<{ role: string; message: string; created_at: string }[]>([]);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const endRef = useRef<HTMLDivElement>(null);
+
+  async function load() {
+    const rows = await fetchChat({ data: { agent } });
+    setMsgs((rows as any[]).filter((r) => r.role === "user" || r.role === "assistant" || r.role === "rule"));
+  }
+  useEffect(() => { if (open) load(); }, [open]);
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
+
+  async function submit() {
+    if (!text.trim()) return;
+    setBusy(true);
+    try {
+      await send({ data: { agent, message: text.trim() } });
+      setText("");
+      await load();
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="mt-4 rounded-lg border border-primary/30 bg-primary/5 p-3">
+      <button onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between text-left text-xs font-semibold text-primary">
+        <span className="inline-flex items-center gap-2"><MessageSquare className="h-3.5 w-3.5" /> Coach this agent (chat)</span>
+        <span className="text-[10px] font-mono text-muted-foreground">{open ? "hide" : "open"}</span>
+      </button>
+      {open && (
+        <div className="mt-3">
+          <div className="max-h-64 space-y-2 overflow-y-auto rounded-md bg-card/40 p-2">
+            {msgs.length === 0 && (
+              <div className="p-3 text-center text-[11px] text-muted-foreground">
+                Tell the agent what it got wrong. Example: "You missed ADANIPORTS — long flat base 1500–1600 with breakout at 1600. Increase weight on long bases."
+              </div>
+            )}
+            {msgs.map((m, idx) => (
+              <div key={idx}
+                className={`rounded-md px-2 py-1.5 text-xs ${
+                  m.role === "user" ? "ml-6 bg-primary/15 text-foreground"
+                  : m.role === "rule" ? "border border-success/40 bg-success/10 text-success"
+                  : "mr-6 bg-secondary text-foreground"}`}>
+                <div className="text-[9px] font-mono uppercase opacity-60">{m.role === "rule" ? "saved rule" : m.role}</div>
+                <div className="mt-0.5 whitespace-pre-wrap">{m.message}</div>
+              </div>
+            ))}
+            <div ref={endRef} />
+          </div>
+          <div className="mt-2 flex gap-2">
+            <input value={text} onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !busy) submit(); }}
+              placeholder="Tell the agent a mistake or new rule…"
+              className="flex-1 rounded-md border border-border bg-card px-3 py-1.5 text-xs" />
+            <button onClick={submit} disabled={busy || !text.trim()}
+              className="inline-flex items-center gap-1 rounded-md bg-[var(--gradient-primary)] px-3 py-1.5 text-xs font-semibold !text-white disabled:opacity-50">
+              {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+              Send
+            </button>
+          </div>
+          <div className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
+            <Sparkles className="h-3 w-3 text-primary" /> Each AI reply that ends with <code className="font-mono">RULE: ...</code> is auto-saved and applied on the next scan.
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,10 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { SiteNav } from "@/components/SiteNav";
 import { Ticker } from "@/components/Ticker";
-import { getQuote, getRecommendations, runAgents } from "@/lib/market.functions";
-import { Sparkles, History, TrendingUp, Loader2, RefreshCw, ArrowRight } from "lucide-react";
+import { getQuote, getRecommendations, removePick, runAgents } from "@/lib/market.functions";
+import { supabase } from "@/integrations/supabase/client";
+import { Sparkles, History, TrendingUp, Loader2, RefreshCw, ArrowRight, Trash2, Upload, X } from "lucide-react";
 
 export const Route = createFileRoute("/picks")({
   component: Picks,
@@ -65,10 +66,13 @@ function Picks() {
             <h1 className="mt-1 font-display text-3xl font-bold">Top Picks</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               Up to 5 highest-conviction swing setups matching your training patterns. Auto-archived after 7 days.
+              <span className="ml-2 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-mono text-primary">
+                threshold: swing &ge; 70 (macro &amp; pattern-history info-only)
+              </span>
             </p>
           </div>
           <button onClick={refresh} disabled={refreshing}
-            className="flex items-center gap-2 rounded-md bg-[var(--gradient-primary)] px-4 py-2 text-sm font-semibold text-primary-foreground glow disabled:opacity-60">
+            className="flex items-center gap-2 rounded-md bg-[var(--gradient-primary)] px-4 py-2 text-sm font-semibold !text-white glow disabled:opacity-60">
             {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             Re-scan now
           </button>
@@ -96,7 +100,7 @@ function Picks() {
             </div>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {data?.active.map((r) => <PickCard key={r.id} r={r} />)}
+              {data?.active.map((r) => <PickCard key={r.id} r={r} onRemoved={load} />)}
             </div>
           )}
         </section>
@@ -152,11 +156,44 @@ function Picks() {
   );
 }
 
-function PickCard({ r }: { r: Rec }) {
+function PickCard({ r, onRemoved }: { r: Rec; onRemoved: () => void }) {
+  const removeFn = useServerFn(removePick);
+  const [showRemove, setShowRemove] = useState(false);
+  const [reason, setReason] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
   const bars: [string, number][] = [
     ["Monthly", r.monthly_score], ["Weekly", r.weekly_score],
-    ["Pattern", r.history_score], ["Volume", r.volume_score], ["RS", r.rs_score],
+    ["Pattern (info)", r.history_score], ["Volume", r.volume_score], ["RS", r.rs_score],
   ];
+
+  function pick(f: File | null) { setFile(f); setPreview(f ? URL.createObjectURL(f) : null); }
+
+  async function submitRemove() {
+    if (!reason.trim()) { setErr("Please add a short reason."); return; }
+    setBusy(true); setErr(null);
+    try {
+      let image_path: string | undefined;
+      if (file) {
+        const ext = file.name.split(".").pop() ?? "png";
+        const path = `${crypto.randomUUID()}.${ext}`;
+        const up = await supabase.storage.from("training-charts").upload(path, file, { contentType: file.type });
+        if (up.error) throw up.error;
+        image_path = path;
+      }
+      await removeFn({ data: { id: r.id, reason: reason.trim(), image_path } });
+      setShowRemove(false); setReason(""); setFile(null); setPreview(null);
+      if (fileRef.current) fileRef.current.value = "";
+      onRemoved();
+    } catch (e: any) {
+      setErr(e?.message ?? "Failed");
+    } finally { setBusy(false); }
+  }
+
   return (
     <div className="rounded-xl glass p-4 transition hover:border-primary/40">
       <div className="flex items-start justify-between">
@@ -202,9 +239,44 @@ function PickCard({ r }: { r: Rec }) {
         </div>
       )}
 
-      <Link to="/research" className="mt-3 flex items-center justify-end gap-1 text-xs text-primary hover:underline">
-        Open in Research <ArrowRight className="h-3 w-3" />
-      </Link>
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <button onClick={() => setShowRemove((v) => !v)}
+          className="inline-flex items-center gap-1 rounded-md border border-destructive/40 px-2 py-1 text-[11px] font-semibold text-destructive hover:bg-destructive/10">
+          <Trash2 className="h-3 w-3" /> Remove
+        </button>
+        <Link to="/research" className="flex items-center gap-1 text-xs text-primary hover:underline">
+          Open in Research <ArrowRight className="h-3 w-3" />
+        </Link>
+      </div>
+
+      {showRemove && (
+        <div className="mt-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+          <div className="mb-2 flex items-center justify-between text-xs font-semibold text-destructive">
+            <span>Tell the AI why this pick is wrong</span>
+            <button onClick={() => setShowRemove(false)}><X className="h-3 w-3" /></button>
+          </div>
+          <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2}
+            placeholder="e.g. Base is too loose, breakout is fake, sector is weakening…"
+            className="w-full rounded-md border border-border bg-card px-2 py-1.5 text-xs" />
+          <label className="mt-2 flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border bg-card/40 px-2 py-2 text-xs hover:border-primary/40">
+            {preview ? (
+              <img src={preview} alt="" className="h-12 w-20 rounded object-cover" />
+            ) : (
+              <><Upload className="h-3 w-3 text-muted-foreground" /><span className="text-muted-foreground">Optional: attach a chart screenshot</span></>
+            )}
+            <input ref={fileRef} type="file" accept="image/*" className="hidden"
+              onChange={(e) => pick(e.target.files?.[0] ?? null)} />
+          </label>
+          {err && <div className="mt-1 text-[10px] text-destructive">{err}</div>}
+          <div className="mt-2 flex justify-end">
+            <button onClick={submitRemove} disabled={busy}
+              className="inline-flex items-center gap-1 rounded-md bg-destructive px-3 py-1.5 text-[11px] font-semibold !text-white disabled:opacity-50">
+              {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+              Save & remove
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -15,16 +15,21 @@ export type AgentScores = {
   reasoning: Record<string, string>;
 };
 
+// Master swing weights — macro & history are computed for context but
+// EXCLUDED from the conviction score (user requirement: macro = info-only,
+// history = info-only). Weights re-normalised to sum to 1.0.
 export const AGENT_WEIGHTS = {
-  monthly: 0.20,
-  weekly: 0.18,
-  sector: 0.14,
-  history: 0.12,
-  fundamental: 0.08,
-  macro: 0.06,
-  rs: 0.12,
+  monthly: 0.25,
+  weekly: 0.22,
+  sector: 0.18,
+  history: 0.00,   // info-only — not included in swing
+  fundamental: 0.10,
+  macro: 0.00,     // info-only — not included in swing
+  rs: 0.15,
   volume: 0.10,
 };
+// Score threshold above which a stock is considered a "top pick" candidate.
+export const TOP_PICK_SWING_THRESHOLD = 70;
 
 export function scoreMonthly(candles: Candle[]): { score: number; reason: string } {
   const closes = candles.map((c) => c.c);
@@ -40,15 +45,58 @@ export function scoreMonthly(candles: Candle[]): { score: number; reason: string
   return { score: Math.round(score), reason: `6m ${ret6m.toFixed(1)}%, EMA200 slope ${(slope200 * 100).toFixed(1)}%` };
 }
 
+// Multi-window weekly-consolidation detector.
+//
+// Old detector only looked at the last ~40 trading days, so multi-month bases
+// (e.g. ADANIPORTS 1300–1600 over 18 months with a clean breakout) scored
+// almost nothing. New version sweeps several lookbacks (≈3M, 6M, 9M, 12M),
+// finds the best base, and rewards:
+//   • tight range relative to mid price
+//   • base length (longer = higher conviction)
+//   • price now near the upper edge / fresh breakout
+//   • shallow drawdown from the base high
 export function scoreWeekly(candles: Candle[]): { score: number; reason: string } {
   const closes = candles.map((c) => c.c);
-  if (closes.length < 50) return { score: 30, reason: "insufficient" };
-  const tight = tightness(closes, 40);            // ~0.02 = very tight, 0.10 = wide
-  const ret1m = pctChange(closes, 21);
-  // Reward tight base + non-extended (-3% to +6% over month)
-  const tightScore = clamp(100 - tight * 900);
-  const baseFlat = ret1m > -3 && ret1m < 6 ? 12 : 0;
-  return { score: Math.round(clamp(tightScore * 0.85 + baseFlat + 8)), reason: `tightness ${(tight * 100).toFixed(1)}%, 1m ${ret1m.toFixed(1)}%` };
+  const highs = candles.map((c) => c.h);
+  const lows = candles.map((c) => c.l);
+  if (closes.length < 60) return { score: 30, reason: "insufficient history" };
+
+  const last = closes[closes.length - 1];
+  const windows = [60, 120, 180, 240].filter((n) => n <= closes.length);
+
+  let best = { score: 25, reason: "no clean base" };
+  for (const n of windows) {
+    const sliceH = highs.slice(-n);
+    const sliceL = lows.slice(-n);
+    const sliceC = closes.slice(-n);
+    const hi = Math.max(...sliceH);
+    const lo = Math.min(...sliceL);
+    const mid = (hi + lo) / 2;
+    if (!mid) continue;
+    const rangePct = ((hi - lo) / mid) * 100;
+    // Reject windows that are wild swings (>40%): not a base.
+    if (rangePct > 40) continue;
+
+    // Tightness component: 0% range → 40 pts, 40% range → 0 pts.
+    const tightPts = Math.max(0, 40 - rangePct);
+    // Length component: longer base = up to 25 pts (caps at 240 bars).
+    const lengthPts = Math.min(25, (n / 240) * 25);
+    // Position component: where in the range is price NOW (0 = at low, 1 = at high)
+    const pos = (last - lo) / Math.max(0.0001, hi - lo);
+    const positionPts = Math.max(0, Math.min(25, pos * 25));
+    // Pullback inside the base: how often closes stayed inside the band
+    const inside = sliceC.filter((c) => c <= hi * 1.02 && c >= lo * 0.98).length;
+    const stabilityPts = (inside / n) * 10;
+
+    const score = Math.round(clamp(15 + tightPts + lengthPts + positionPts + stabilityPts));
+    if (score > best.score) {
+      best = {
+        score,
+        reason: `${n}d base · range ${rangePct.toFixed(1)}% · price ${(pos * 100).toFixed(0)}% up the range`,
+      };
+    }
+  }
+  return best;
 }
 
 export function scoreVolume(candles: Candle[]): { score: number; reason: string } {
