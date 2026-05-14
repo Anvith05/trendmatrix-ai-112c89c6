@@ -99,7 +99,8 @@ function Agents() {
                     <ChevronRight className="h-3 w-3 rotate-90 text-primary" />
                   </div>
                 )}
-                {a.id === "weekly" && <AgentChat agent="weekly_consolidation" />}
+                {a.id === "weekly" && <WeeklyBacktest />}
+                <AgentChat agent={a.id === "weekly" ? "weekly_consolidation" : a.id} />
               </div>
             );
           })}
