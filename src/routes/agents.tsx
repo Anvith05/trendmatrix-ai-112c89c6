@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { SiteNav } from "@/components/SiteNav";
 import { agents } from "@/lib/mockData";
-import { getAgentChat, sendAgentChat } from "@/lib/market.functions";
+import { getAgentChat, sendAgentChat, backtestWeekly } from "@/lib/market.functions";
 import { ChevronRight, Cpu, CheckCircle2, XCircle, MessageSquare, Send, Loader2, Sparkles } from "lucide-react";
 
 export const Route = createFileRoute("/agents")({ component: Agents,
@@ -99,7 +99,8 @@ function Agents() {
                     <ChevronRight className="h-3 w-3 rotate-90 text-primary" />
                   </div>
                 )}
-                {a.id === "weekly" && <AgentChat agent="weekly_consolidation" />}
+                {a.id === "weekly" && <WeeklyBacktest />}
+                <AgentChat agent={a.id === "weekly" ? "weekly_consolidation" : a.id} />
               </div>
             );
           })}
@@ -178,6 +179,94 @@ function AgentChat({ agent }: { agent: string }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function WeeklyBacktest() {
+  const run = useServerFn(backtestWeekly);
+  const [open, setOpen] = useState(false);
+  const [threshold, setThreshold] = useState(70);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<any>(null);
+
+  async function go() {
+    setBusy(true);
+    try { setResult(await run({ data: { threshold } })); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <div className="mt-4 rounded-lg border border-violet-400/30 bg-violet-400/5 p-3">
+      <button onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between text-left text-xs font-semibold text-violet-300">
+        <span className="inline-flex items-center gap-2"><Sparkles className="h-3.5 w-3.5" /> Backtest weekly detector on training library</span>
+        <span className="text-[10px] font-mono text-muted-foreground">{open ? "hide" : "open"}</span>
+      </button>
+      {open && (
+        <div className="mt-3 space-y-3">
+          <div className="flex items-center gap-2 text-xs">
+            <label className="text-muted-foreground">Threshold</label>
+            <input type="number" min={40} max={95} value={threshold}
+              onChange={(e) => setThreshold(Number(e.target.value) || 70)}
+              className="w-20 rounded-md border border-border bg-card px-2 py-1 text-xs" />
+            <button onClick={go} disabled={busy}
+              className="inline-flex items-center gap-1 rounded-md bg-[var(--gradient-primary)] px-3 py-1.5 text-xs font-semibold !text-white disabled:opacity-50">
+              {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+              Run backtest
+            </button>
+            <span className="text-[10px] text-muted-foreground">Includes successful + failed (removed) picks.</span>
+          </div>
+
+          {result && (
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2 text-xs md:grid-cols-4">
+                <Metric label="Examples" value={result.total} />
+                <Metric label="Precision" value={`${(result.precision * 100).toFixed(0)}%`} />
+                <Metric label="Recall" value={`${(result.recall * 100).toFixed(0)}%`} />
+                <Metric label="Accuracy" value={`${(result.accuracy * 100).toFixed(0)}%`} />
+              </div>
+              <div className="grid grid-cols-4 gap-2 text-[10px] font-mono text-muted-foreground">
+                <span>TP {result.tp}</span><span>FP {result.fp}</span>
+                <span>FN {result.fn}</span><span>TN {result.tn}</span>
+              </div>
+              <div className="rounded-md border border-success/30 bg-success/5 p-2">
+                <div className="text-[10px] font-mono uppercase text-success">Recommendations</div>
+                <ul className="mt-1 list-disc space-y-1 pl-4 text-xs">
+                  {result.recommendations.map((r: string, i: number) => <li key={i}>{r}</li>)}
+                </ul>
+              </div>
+              <div className="max-h-48 overflow-y-auto rounded-md border border-border">
+                <table className="w-full text-left text-[11px]">
+                  <thead className="bg-secondary/40 text-[10px] font-mono uppercase text-muted-foreground">
+                    <tr><th className="p-1.5">Symbol</th><th className="p-1.5">Label</th><th className="p-1.5">Score</th><th className="p-1.5">Pred</th><th className="p-1.5"></th></tr>
+                  </thead>
+                  <tbody>
+                    {result.rows.map((r: any, i: number) => (
+                      <tr key={i} className="border-t border-border/50">
+                        <td className="p-1.5 font-semibold">{r.symbol}</td>
+                        <td className="p-1.5 text-muted-foreground">{r.label}</td>
+                        <td className="p-1.5 font-mono">{r.weekly_score}</td>
+                        <td className="p-1.5">{r.predicted_breakout ? "✓" : "—"}</td>
+                        <td className={`p-1.5 ${r.correct ? "text-success" : "text-destructive"}`}>{r.correct ? "ok" : "miss"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-md border border-border bg-card/40 p-2">
+      <div className="text-[10px] font-mono uppercase text-muted-foreground">{label}</div>
+      <div className="text-base font-bold">{value}</div>
     </div>
   );
 }

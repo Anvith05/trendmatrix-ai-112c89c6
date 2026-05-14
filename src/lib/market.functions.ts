@@ -444,8 +444,20 @@ export const sendAgentChat = createServerFn({ method: "POST" })
       .order("created_at", { ascending: true })
       .limit(40);
 
-    const system = `You are the ${data.agent.replace(/_/g, " ")} agent for an Indian-equities swing-trading AI.
-Your job is to detect tight multi-week / multi-month consolidation bases and the moment price breaks out of them.
+    const agentDescriptions: Record<string, string> = {
+      data: "live market data ingestion (NSE/BSE OHLCV, delivery %, freshness)",
+      sector: "sector sync — detect when ≥40% of a sector's members are basing while the sector trend remains bullish",
+      monthly: "monthly trend strength — higher highs/lows, EMA50/200 stack, 6-month return",
+      weekly: "weekly consolidation — multi-month tight bases, range tightness, breakout proximity",
+      weekly_consolidation: "weekly consolidation — multi-month tight bases, range tightness, breakout proximity",
+      history: "historical pattern matching against the user-curated training library",
+      fundamental: "fundamental quality — ROCE, earnings momentum, distance from 52-week high",
+      macro: "macro / news regime — Nifty trend, sector tailwinds, policy signals",
+      master: "master conviction — weighted ensemble of all upstream agents",
+    };
+    const desc = agentDescriptions[data.agent] ?? data.agent.replace(/_/g, " ");
+    const system = `You are the "${data.agent.replace(/_/g, " ")}" agent for an Indian-equities swing-trading AI.
+Specialty: ${desc}.
 The user is teaching you. Listen carefully to mistakes (e.g. "you missed ADANIPORTS — long flat base, breakout at 1600").
 Reply concisely (max 6 lines): (1) what you understood, (2) the new rule you'll apply, (3) one concrete heuristic / threshold change.
 End with a single line:
@@ -496,4 +508,77 @@ export const getCategoryStocks = createServerFn({ method: "GET" })
     if (data.category === "high_conviction")      query = query.gte("swing_score", TOP_PICK_SWING_THRESHOLD);
     const { data: rows } = await query.order("swing_score", { ascending: false }).limit(50);
     return rows ?? [];
+  });
+
+// Backtest the weekly consolidation detector against the user's training
+// library. For every example with a known symbol we re-fetch candles,
+// re-run scoreWeekly, and check whether the score (above the chosen
+// threshold) actually correlates with a successful breakout vs a failed
+// one (removed picks land in training_examples as 'failed_breakout').
+export const backtestWeekly = createServerFn({ method: "POST" })
+  .inputValidator((d: { threshold?: number }) => d ?? {})
+  .handler(async ({ data }) => {
+    const threshold = data?.threshold ?? 70;
+    const { data: examples } = await supabaseAdmin
+      .from("training_examples")
+      .select("symbol, sector, label, tags, features, note, image_path")
+      .not("symbol", "is", null)
+      .limit(200);
+
+    const rows: any[] = [];
+    let tp = 0, fp = 0, fn = 0, tn = 0;
+    for (const ex of examples ?? []) {
+      const u = await supabaseAdmin
+        .from("stock_universe").select("yahoo_symbol").eq("symbol", String(ex.symbol).toUpperCase()).maybeSingle();
+      const ys = u.data?.yahoo_symbol ?? `${String(ex.symbol).toUpperCase()}.NS`;
+      const q = await fetchYahooChart(ys, "2y", "1d");
+      if (!q) continue;
+      const w = scoreWeekly(q.candles);
+      const positive = String(ex.label).toLowerCase() === "successful_breakout";
+      const predicted = w.score >= threshold;
+      if (positive && predicted) tp++;
+      else if (!positive && predicted) fp++;
+      else if (positive && !predicted) fn++;
+      else tn++;
+      rows.push({
+        symbol: ex.symbol, sector: ex.sector, label: ex.label,
+        weekly_score: w.score, predicted_breakout: predicted,
+        correct: positive === predicted, reason: w.reason, note: ex.note,
+      });
+    }
+
+    const total = tp + fp + fn + tn;
+    const precision = tp + fp ? tp / (tp + fp) : 0;
+    const recall = tp + fn ? tp / (tp + fn) : 0;
+    const accuracy = total ? (tp + tn) / total : 0;
+
+    // Simple parameter recommendation
+    const recs: string[] = [];
+    if (precision < 0.6 && fp > 0) {
+      recs.push(`Raise threshold from ${threshold} → ${threshold + 5}: too many false positives (${fp}).`);
+    }
+    if (recall < 0.6 && fn > 0) {
+      recs.push(`Lower threshold from ${threshold} → ${Math.max(50, threshold - 5)}: missing ${fn} successful breakouts.`);
+    }
+    if (precision >= 0.75 && recall >= 0.75) {
+      recs.push(`Threshold ${threshold} is well-calibrated (P=${(precision*100).toFixed(0)}%, R=${(recall*100).toFixed(0)}%).`);
+    }
+    if (!recs.length) recs.push("Need more training examples for a meaningful recommendation (aim for 20+ labeled charts).");
+
+    // Persist a summary line so the agent can learn from it
+    if (total >= 5) {
+      await supabaseAdmin.from("agent_feedback").insert({
+        agent: "weekly_consolidation",
+        role: "rule",
+        message: `Backtest @ threshold=${threshold}: P=${(precision*100).toFixed(0)}% R=${(recall*100).toFixed(0)}% on ${total} examples. ${recs[0]}`,
+        context: { threshold, precision, recall, accuracy, tp, fp, fn, tn },
+      });
+    }
+
+    return {
+      threshold, total, tp, fp, fn, tn,
+      precision, recall, accuracy,
+      recommendations: recs,
+      rows: rows.sort((a, b) => Number(b.weekly_score) - Number(a.weekly_score)),
+    };
   });
