@@ -3,9 +3,9 @@ import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { SiteNav } from "@/components/SiteNav";
 import { Ticker } from "@/components/Ticker";
-import { getQuote, getRecommendations, removePick, runAgents } from "@/lib/market.functions";
+import { getLatestRankings, getQuote, getRecommendations, removePick, runAgents } from "@/lib/market.functions";
 import { supabase } from "@/integrations/supabase/client";
-import { Sparkles, History, TrendingUp, Loader2, RefreshCw, ArrowRight, Trash2, Upload, X } from "lucide-react";
+import { Sparkles, History, TrendingUp, Loader2, RefreshCw, ArrowRight, Trash2, Upload, X, Layers } from "lucide-react";
 
 export const Route = createFileRoute("/picks")({
   component: Picks,
