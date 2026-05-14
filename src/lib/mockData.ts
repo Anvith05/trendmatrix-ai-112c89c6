@@ -164,10 +164,10 @@ export function topRanked(limit = 12): Stock[] {
 
 export const agents = [
   { id: "data", name: "Live Market Data AI", status: "streaming", processed: 2147, accepted: 2147, color: "cyan" },
-  { id: "monthly", name: "Monthly Trend AI", status: "active", processed: 2147, accepted: 612, color: "violet" },
-  { id: "weekly", name: "Weekly Consolidation AI", status: "active", processed: 612, accepted: 198, color: "cyan" },
-  { id: "sector", name: "Sector Sync AI", status: "active", processed: 198, accepted: 87, color: "violet" },
-  { id: "history", name: "Historical Pattern AI", status: "active", processed: 87, accepted: 54, color: "cyan" },
+  { id: "sector", name: "Sector Sync AI", status: "active", processed: 2147, accepted: 980, color: "violet" },
+  { id: "monthly", name: "Monthly Trend AI", status: "active", processed: 980, accepted: 612, color: "cyan" },
+  { id: "weekly", name: "Weekly Consolidation AI", status: "active", processed: 612, accepted: 198, color: "violet" },
+  { id: "history", name: "Historical Pattern AI", status: "active", processed: 198, accepted: 87, color: "cyan" },
   { id: "fundamental", name: "Fundamental Validation AI", status: "active", processed: 54, accepted: 41, color: "violet" },
   { id: "macro", name: "Macro / News AI", status: "active", processed: 41, accepted: 38, color: "cyan" },
   { id: "master", name: "Master Conviction AI", status: "ranking", processed: 38, accepted: 12, color: "violet" },
