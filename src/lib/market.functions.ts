@@ -444,8 +444,20 @@ export const sendAgentChat = createServerFn({ method: "POST" })
       .order("created_at", { ascending: true })
       .limit(40);
 
-    const system = `You are the ${data.agent.replace(/_/g, " ")} agent for an Indian-equities swing-trading AI.
-Your job is to detect tight multi-week / multi-month consolidation bases and the moment price breaks out of them.
+    const agentDescriptions: Record<string, string> = {
+      data: "live market data ingestion (NSE/BSE OHLCV, delivery %, freshness)",
+      sector: "sector sync — detect when ≥40% of a sector's members are basing while the sector trend remains bullish",
+      monthly: "monthly trend strength — higher highs/lows, EMA50/200 stack, 6-month return",
+      weekly: "weekly consolidation — multi-month tight bases, range tightness, breakout proximity",
+      weekly_consolidation: "weekly consolidation — multi-month tight bases, range tightness, breakout proximity",
+      history: "historical pattern matching against the user-curated training library",
+      fundamental: "fundamental quality — ROCE, earnings momentum, distance from 52-week high",
+      macro: "macro / news regime — Nifty trend, sector tailwinds, policy signals",
+      master: "master conviction — weighted ensemble of all upstream agents",
+    };
+    const desc = agentDescriptions[data.agent] ?? data.agent.replace(/_/g, " ");
+    const system = `You are the "${data.agent.replace(/_/g, " ")}" agent for an Indian-equities swing-trading AI.
+Specialty: ${desc}.
 The user is teaching you. Listen carefully to mistakes (e.g. "you missed ADANIPORTS — long flat base, breakout at 1600").
 Reply concisely (max 6 lines): (1) what you understood, (2) the new rule you'll apply, (3) one concrete heuristic / threshold change.
 End with a single line:
