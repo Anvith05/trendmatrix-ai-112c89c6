@@ -139,7 +139,7 @@ function Picks() {
             </div>
           ) : (
             <div className="grid gap-4 md:grid-cols-3">
-              {sectorBuckets.map((b) => (
+              {sectorBuckets.map((b: any) => (
                 <div key={b.sector} className="rounded-xl glass p-4">
                   <div className="mb-3 flex items-center justify-between">
                     <div>
@@ -147,12 +147,27 @@ function Picks() {
                       <div className="font-display text-base font-semibold">{b.sector}</div>
                     </div>
                     <div className="text-right">
-                      <div className="font-mono text-2xl font-bold text-gradient">{Math.round(b.avgSec)}</div>
-                      <div className="text-[10px] font-mono uppercase text-muted-foreground">sync score</div>
+                      <div className="font-mono text-2xl font-bold text-gradient">{b.avg_sector_score}</div>
+                      <div className="text-[10px] font-mono uppercase text-muted-foreground">sector AI score</div>
                     </div>
                   </div>
+                  {b.etf && (
+                    <Link to="/research" className="mb-2 flex items-center justify-between rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-sm hover:border-primary">
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono font-semibold">{b.etf.symbol}</span>
+                          <span className="rounded-full bg-primary/20 px-1.5 py-0.5 text-[9px] font-mono uppercase text-primary">ETF play</span>
+                        </div>
+                        <div className="text-[10px] text-muted-foreground">sector index proxy</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-mono text-lg font-bold text-gradient">{b.etf.swing_score}</div>
+                        <div className="text-[10px] font-mono text-muted-foreground">₹{Number(b.etf.ltp ?? 0).toFixed(2)}</div>
+                      </div>
+                    </Link>
+                  )}
                   <div className="space-y-2">
-                    {b.rows.map((r: any) => (
+                    {(b.stocks ?? []).map((r: any) => (
                       <Link key={r.id} to="/research" className="flex items-center justify-between rounded-md border border-border/60 bg-card/40 px-3 py-2 text-sm hover:border-primary/40">
                         <div>
                           <div className="font-mono font-semibold">{r.symbol}</div>
