@@ -43,7 +43,7 @@ function Picks() {
   const fetchTopSectors = useServerFn(getTopSectors);
   const runAgentsFn = useServerFn(runAgents);
   const [data, setData] = useState<{ active: Rec[]; history: Rec[] } | null>(null);
-  const [, setRankings] = useState<any[]>([]);
+  const [, setRankings] = useState<any[]>([]); // kept for future use
   const [topSectors, setTopSectors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
