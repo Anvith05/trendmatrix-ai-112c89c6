@@ -16,6 +16,7 @@ export function SiteNav() {
           {[
             { to: "/dashboard", label: "Dashboard" },
             { to: "/picks", label: "Top Picks" },
+            { to: "/journal", label: "Journal" },
             { to: "/research", label: "Research" },
             { to: "/agents", label: "AI Agents" },
             { to: "/sectors", label: "Sectors" },
