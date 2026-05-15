@@ -74,6 +74,63 @@ export type Database = {
         }
         Relationships: []
       }
+      journal_entries: {
+        Row: {
+          closed_at: string | null
+          current_price: number | null
+          entry_price: number
+          id: string
+          kind: string
+          last_checked_at: string | null
+          name: string | null
+          peak_price: number | null
+          recommendation_id: string | null
+          sector: string | null
+          status: string
+          suggested_at: string
+          swing_score: number | null
+          symbol: string
+          tags: string[] | null
+          target_price: number | null
+        }
+        Insert: {
+          closed_at?: string | null
+          current_price?: number | null
+          entry_price: number
+          id?: string
+          kind?: string
+          last_checked_at?: string | null
+          name?: string | null
+          peak_price?: number | null
+          recommendation_id?: string | null
+          sector?: string | null
+          status?: string
+          suggested_at?: string
+          swing_score?: number | null
+          symbol: string
+          tags?: string[] | null
+          target_price?: number | null
+        }
+        Update: {
+          closed_at?: string | null
+          current_price?: number | null
+          entry_price?: number
+          id?: string
+          kind?: string
+          last_checked_at?: string | null
+          name?: string | null
+          peak_price?: number | null
+          recommendation_id?: string | null
+          sector?: string | null
+          status?: string
+          suggested_at?: string
+          swing_score?: number | null
+          symbol?: string
+          tags?: string[] | null
+          target_price?: number | null
+        }
+        Relationships: []
+      }
       price_cache: {
         Row: {
           payload: Json
@@ -244,6 +301,7 @@ export type Database = {
           created_at: string
           exchange: string
           id: string
+          kind: string
           name: string
           sector: string
           symbol: string
@@ -254,6 +312,7 @@ export type Database = {
           created_at?: string
           exchange?: string
           id?: string
+          kind?: string
           name: string
           sector: string
           symbol: string
@@ -264,6 +323,7 @@ export type Database = {
           created_at?: string
           exchange?: string
           id?: string
+          kind?: string
           name?: string
           sector?: string
           symbol?: string
