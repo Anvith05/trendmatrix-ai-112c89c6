@@ -494,6 +494,106 @@ RULE: <one-line rule the scoring engine should remember>`;
     return { reply };
   });
 
+// Top sectors by the Sector AI agent's own sector_score (highest first).
+// Returns top 3 sectors with average sector_score and the top 3 stocks/ETFs in each.
+export const getTopSectors = createServerFn({ method: "GET" }).handler(async () => {
+  const { data: lastRun } = await supabaseAdmin
+    .from("agent_runs").select("*").eq("status", "success")
+    .order("finished_at", { ascending: false }).limit(1).maybeSingle();
+  if (!lastRun) return { sectors: [] as any[] };
+
+  const { data: rk } = await supabaseAdmin
+    .from("rankings").select("*").eq("run_id", lastRun.id);
+  const rows = rk ?? [];
+
+  // Pull universe to know kind (stock vs etf) per symbol
+  const { data: uni } = await supabaseAdmin.from("stock_universe").select("symbol, kind");
+  const kindMap = new Map((uni ?? []).map((u) => [u.symbol, u.kind ?? "stock"]));
+
+  const bySector = new Map<string, any[]>();
+  for (const r of rows) {
+    if (!r.sector || r.sector === "Index") continue;
+    if (!bySector.has(r.sector)) bySector.set(r.sector, []);
+    bySector.get(r.sector)!.push({ ...r, kind: kindMap.get(r.symbol) ?? "stock" });
+  }
+
+  // Find a matching ETF for a sector (best-effort by sector name match in universe)
+  const etfForSector = new Map<string, any>();
+  for (const u of uni ?? []) {
+    if (u.kind !== "etf") continue;
+    const match = rows.find((r) => r.symbol === u.symbol);
+    if (match) etfForSector.set((match as any).sector ?? "", { ...match, kind: "etf" });
+  }
+  // Also pull ETF rows that may have no peers
+  const etfRows = rows.filter((r) => kindMap.get(r.symbol) === "etf");
+
+  const sectors = Array.from(bySector.entries())
+    .map(([sector, stocks]) => {
+      const avg = stocks.reduce((a, b) => a + (b.sector_score ?? 0), 0) / stocks.length;
+      const topStocks = [...stocks]
+        .filter((s) => s.kind === "stock")
+        .sort((a, b) => (b.swing_score ?? 0) - (a.swing_score ?? 0))
+        .slice(0, 3);
+      const etf =
+        etfRows.find((e) => (e.sector ?? "").toLowerCase() === sector.toLowerCase()) ?? null;
+      return { sector, avg_sector_score: Math.round(avg), stocks: topStocks, etf };
+    })
+    .sort((a, b) => b.avg_sector_score - a.avg_sector_score)
+    .slice(0, 3);
+
+  return { sectors };
+});
+
+// === Journal ===
+export const getJournal = createServerFn({ method: "GET" }).handler(async () => {
+  const { data } = await supabaseAdmin
+    .from("journal_entries").select("*")
+    .order("suggested_at", { ascending: false }).limit(500);
+  const entries = data ?? [];
+  const total = entries.length;
+  const winners = entries.filter((e) => e.status === "winner").length;
+  const losers = entries.filter((e) => e.status === "loser").length;
+  const inProgress = entries.filter((e) => e.status === "in_progress").length;
+  const closed = winners + losers;
+  const winRate = closed ? winners / closed : 0;
+  return {
+    entries,
+    stats: { total, winners, losers, inProgress, winRate },
+  };
+});
+
+// Refreshes outcomes: fetches latest price for every in-progress entry and
+// applies winner (≥30% from entry) / loser (after 365d still negative) rules.
+export const updateJournalOutcomes = createServerFn({ method: "POST" }).handler(async () => {
+  const { data: entries } = await supabaseAdmin
+    .from("journal_entries").select("*").eq("status", "in_progress");
+  let promoted = 0, busted = 0, updated = 0;
+  for (const e of entries ?? []) {
+    const { data: u } = await supabaseAdmin.from("stock_universe")
+      .select("yahoo_symbol").eq("symbol", e.symbol).maybeSingle();
+    const ys = u?.yahoo_symbol ?? `${e.symbol}.NS`;
+    const q = await fetchYahooChart(ys, "1y", "1d");
+    if (!q) continue;
+    const last = Number(q.ltp ?? 0);
+    const entry = Number(e.entry_price ?? 0);
+    if (entry <= 0 || last <= 0) continue;
+    const peak = Math.max(Number(e.peak_price ?? 0), last);
+    const ageMs = Date.now() - new Date(e.suggested_at).getTime();
+    const oneYear = 365 * 24 * 60 * 60 * 1000;
+    let status = "in_progress";
+    let closed_at: string | null = null;
+    if (peak >= entry * 1.30) { status = "winner"; closed_at = new Date().toISOString(); promoted++; }
+    else if (ageMs >= oneYear && last < entry) { status = "loser"; closed_at = new Date().toISOString(); busted++; }
+    else { updated++; }
+    await supabaseAdmin.from("journal_entries").update({
+      current_price: last, peak_price: peak, status,
+      closed_at: closed_at ?? e.closed_at,
+      last_checked_at: new Date().toISOString(),
+    }).eq("id", e.id);
+  }
+  return { checked: entries?.length ?? 0, promoted, busted, updated };
+});
+
 export const getCategoryStocks = createServerFn({ method: "GET" })
   .inputValidator((d: { category: "bullish_monthly" | "weekly_consolidation" | "synced_sector" | "high_conviction" }) => d)
   .handler(async ({ data }) => {
