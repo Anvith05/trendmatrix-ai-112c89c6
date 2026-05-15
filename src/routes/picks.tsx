@@ -40,18 +40,21 @@ function timeLeft(expires: string) {
 function Picks() {
   const fetchRecs = useServerFn(getRecommendations);
   const fetchRankings = useServerFn(getLatestRankings);
+  const fetchTopSectors = useServerFn(getTopSectors);
   const runAgentsFn = useServerFn(runAgents);
   const [data, setData] = useState<{ active: Rec[]; history: Rec[] } | null>(null);
-  const [rankings, setRankings] = useState<any[]>([]);
+  const [, setRankings] = useState<any[]>([]);
+  const [topSectors, setTopSectors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   async function load() {
     setLoading(true);
     try {
-      const [recs, rk] = await Promise.all([fetchRecs(), fetchRankings()]);
+      const [recs, rk, ts] = await Promise.all([fetchRecs(), fetchRankings(), fetchTopSectors()]);
       setData(recs);
       setRankings((rk as any)?.rankings ?? []);
+      setTopSectors((ts as any)?.sectors ?? []);
     } finally { setLoading(false); }
   }
   useEffect(() => { load(); }, []);
@@ -62,25 +65,8 @@ function Picks() {
     finally { setRefreshing(false); }
   }
 
-  // Top 3 sectors by avg sector_score (min 2 stocks), then top 3 stocks per sector by swing_score
-  const sectorBuckets = (() => {
-    const map = new Map<string, any[]>();
-    for (const r of rankings) {
-      if (!r.sector) continue;
-      if (!map.has(r.sector)) map.set(r.sector, []);
-      map.get(r.sector)!.push(r);
-    }
-    const ranked = Array.from(map.entries())
-      .filter(([, rows]) => rows.length >= 2)
-      .map(([sector, rows]) => {
-        const avgSec = rows.reduce((a, b) => a + (b.sector_score ?? 0), 0) / rows.length;
-        const avgSwing = rows.reduce((a, b) => a + (b.swing_score ?? 0), 0) / rows.length;
-        return { sector, avgSec, avgSwing, rows: [...rows].sort((a, b) => b.swing_score - a.swing_score).slice(0, 3) };
-      })
-      .sort((a, b) => b.avgSec - a.avgSec || b.avgSwing - a.avgSwing)
-      .slice(0, 3);
-    return ranked;
-  })();
+  // sector buckets now come from getTopSectors (ranks by sector AI agent score)
+  const sectorBuckets = topSectors;
 
   return (
     <div className="min-h-screen">
