@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { SiteNav } from "@/components/SiteNav";
 import { Ticker } from "@/components/Ticker";
-import { getLatestRankings, getQuote, getRecommendations, removePick, runAgents } from "@/lib/market.functions";
+import { getLatestRankings, getQuote, getRecommendations, getTopSectors, removePick, runAgents } from "@/lib/market.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { Sparkles, History, TrendingUp, Loader2, RefreshCw, ArrowRight, Trash2, Upload, X, Layers } from "lucide-react";
 
@@ -40,18 +40,21 @@ function timeLeft(expires: string) {
 function Picks() {
   const fetchRecs = useServerFn(getRecommendations);
   const fetchRankings = useServerFn(getLatestRankings);
+  const fetchTopSectors = useServerFn(getTopSectors);
   const runAgentsFn = useServerFn(runAgents);
   const [data, setData] = useState<{ active: Rec[]; history: Rec[] } | null>(null);
-  const [rankings, setRankings] = useState<any[]>([]);
+  const [, setRankings] = useState<any[]>([]); // kept for future use
+  const [topSectors, setTopSectors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   async function load() {
     setLoading(true);
     try {
-      const [recs, rk] = await Promise.all([fetchRecs(), fetchRankings()]);
+      const [recs, rk, ts] = await Promise.all([fetchRecs(), fetchRankings(), fetchTopSectors()]);
       setData(recs);
       setRankings((rk as any)?.rankings ?? []);
+      setTopSectors((ts as any)?.sectors ?? []);
     } finally { setLoading(false); }
   }
   useEffect(() => { load(); }, []);
@@ -62,25 +65,8 @@ function Picks() {
     finally { setRefreshing(false); }
   }
 
-  // Top 3 sectors by avg sector_score (min 2 stocks), then top 3 stocks per sector by swing_score
-  const sectorBuckets = (() => {
-    const map = new Map<string, any[]>();
-    for (const r of rankings) {
-      if (!r.sector) continue;
-      if (!map.has(r.sector)) map.set(r.sector, []);
-      map.get(r.sector)!.push(r);
-    }
-    const ranked = Array.from(map.entries())
-      .filter(([, rows]) => rows.length >= 2)
-      .map(([sector, rows]) => {
-        const avgSec = rows.reduce((a, b) => a + (b.sector_score ?? 0), 0) / rows.length;
-        const avgSwing = rows.reduce((a, b) => a + (b.swing_score ?? 0), 0) / rows.length;
-        return { sector, avgSec, avgSwing, rows: [...rows].sort((a, b) => b.swing_score - a.swing_score).slice(0, 3) };
-      })
-      .sort((a, b) => b.avgSec - a.avgSec || b.avgSwing - a.avgSwing)
-      .slice(0, 3);
-    return ranked;
-  })();
+  // sector buckets now come from getTopSectors (ranks by sector AI agent score)
+  const sectorBuckets = topSectors;
 
   return (
     <div className="min-h-screen">
@@ -153,7 +139,7 @@ function Picks() {
             </div>
           ) : (
             <div className="grid gap-4 md:grid-cols-3">
-              {sectorBuckets.map((b) => (
+              {sectorBuckets.map((b: any) => (
                 <div key={b.sector} className="rounded-xl glass p-4">
                   <div className="mb-3 flex items-center justify-between">
                     <div>
@@ -161,12 +147,27 @@ function Picks() {
                       <div className="font-display text-base font-semibold">{b.sector}</div>
                     </div>
                     <div className="text-right">
-                      <div className="font-mono text-2xl font-bold text-gradient">{Math.round(b.avgSec)}</div>
-                      <div className="text-[10px] font-mono uppercase text-muted-foreground">sync score</div>
+                      <div className="font-mono text-2xl font-bold text-gradient">{b.avg_sector_score}</div>
+                      <div className="text-[10px] font-mono uppercase text-muted-foreground">sector AI score</div>
                     </div>
                   </div>
+                  {b.etf && (
+                    <Link to="/research" className="mb-2 flex items-center justify-between rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-sm hover:border-primary">
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono font-semibold">{b.etf.symbol}</span>
+                          <span className="rounded-full bg-primary/20 px-1.5 py-0.5 text-[9px] font-mono uppercase text-primary">ETF play</span>
+                        </div>
+                        <div className="text-[10px] text-muted-foreground">sector index proxy</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-mono text-lg font-bold text-gradient">{b.etf.swing_score}</div>
+                        <div className="text-[10px] font-mono text-muted-foreground">₹{Number(b.etf.ltp ?? 0).toFixed(2)}</div>
+                      </div>
+                    </Link>
+                  )}
                   <div className="space-y-2">
-                    {b.rows.map((r: any) => (
+                    {(b.stocks ?? []).map((r: any) => (
                       <Link key={r.id} to="/research" className="flex items-center justify-between rounded-md border border-border/60 bg-card/40 px-3 py-2 text-sm hover:border-primary/40">
                         <div>
                           <div className="font-mono font-semibold">{r.symbol}</div>

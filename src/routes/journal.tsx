@@ -1,0 +1,170 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { SiteNav } from "@/components/SiteNav";
+import { Ticker } from "@/components/Ticker";
+import { getJournal, updateJournalOutcomes } from "@/lib/market.functions";
+import { BookOpen, Loader2, RefreshCw, Trophy, TrendingDown, Hourglass, Layers } from "lucide-react";
+
+export const Route = createFileRoute("/journal")({
+  component: Journal,
+  head: () => ({ meta: [
+    { title: "Trade Journal · TrendMatrix AI" },
+    { name: "description", content: "Auto-logged AI recommendations with win rate, losers, and in-progress status." },
+  ] }),
+});
+
+type Entry = {
+  id: string; symbol: string; name: string | null; sector: string | null;
+  kind: string; entry_price: number; target_price: number | null;
+  current_price: number | null; peak_price: number | null;
+  status: string; suggested_at: string; closed_at: string | null;
+  swing_score: number | null; tags: string[] | null;
+};
+
+function fmt(d: string | null) {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("en-IN", { dateStyle: "medium" });
+}
+
+function pct(cur: number | null, entry: number) {
+  if (!cur || !entry) return null;
+  return ((cur - entry) / entry) * 100;
+}
+
+function StatusBadge({ s }: { s: string }) {
+  if (s === "winner") return <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-mono uppercase text-success">winner</span>;
+  if (s === "loser") return <span className="rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] font-mono uppercase text-destructive">loser</span>;
+  return <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-mono uppercase text-primary">in progress</span>;
+}
+
+function Section({ title, icon, entries }: { title: string; icon: React.ReactNode; entries: Entry[] }) {
+  return (
+    <section className="mb-8">
+      <div className="mb-3 flex items-center gap-2">
+        {icon}
+        <h2 className="font-display text-lg font-semibold">{title}</h2>
+        <span className="rounded-full border border-border px-2 py-0.5 font-mono text-[10px] text-muted-foreground">{entries.length}</span>
+      </div>
+      <div className="overflow-x-auto rounded-xl glass">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-secondary/40 text-xs font-mono uppercase text-muted-foreground">
+            <tr>
+              <th className="px-3 py-2">Symbol</th>
+              <th className="px-3 py-2">Sector</th>
+              <th className="px-3 py-2">Kind</th>
+              <th className="px-3 py-2">Suggested</th>
+              <th className="px-3 py-2">Entry</th>
+              <th className="px-3 py-2">Target (+30%)</th>
+              <th className="px-3 py-2">Current</th>
+              <th className="px-3 py-2">P/L</th>
+              <th className="px-3 py-2">Status</th>
+              <th className="px-3 py-2">Closed</th>
+            </tr>
+          </thead>
+          <tbody>
+            {entries.length === 0 && (
+              <tr><td colSpan={10} className="px-3 py-8 text-center text-muted-foreground">No entries yet.</td></tr>
+            )}
+            {entries.map((e) => {
+              const p = pct(e.current_price, e.entry_price);
+              return (
+                <tr key={e.id} className="border-t border-border/60 hover:bg-secondary/20">
+                  <td className="px-3 py-2 font-mono font-semibold">
+                    {e.symbol}
+                    <div className="text-[10px] font-normal text-muted-foreground">{e.name}</div>
+                  </td>
+                  <td className="px-3 py-2 text-xs text-muted-foreground">{e.sector ?? "—"}</td>
+                  <td className="px-3 py-2 text-[10px] uppercase">{e.kind}</td>
+                  <td className="px-3 py-2 text-xs text-muted-foreground">{fmt(e.suggested_at)}</td>
+                  <td className="px-3 py-2 font-mono">₹{Number(e.entry_price).toFixed(2)}</td>
+                  <td className="px-3 py-2 font-mono text-muted-foreground">{e.target_price ? `₹${Number(e.target_price).toFixed(2)}` : "—"}</td>
+                  <td className="px-3 py-2 font-mono">{e.current_price ? `₹${Number(e.current_price).toFixed(2)}` : "—"}</td>
+                  <td className={`px-3 py-2 font-mono ${p == null ? "" : p >= 0 ? "text-success" : "text-destructive"}`}>
+                    {p == null ? "—" : `${p >= 0 ? "+" : ""}${p.toFixed(1)}%`}
+                  </td>
+                  <td className="px-3 py-2"><StatusBadge s={e.status} /></td>
+                  <td className="px-3 py-2 text-xs text-muted-foreground">{fmt(e.closed_at)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function Kpi({ label, value, icon, tone }: { label: string; value: string; icon: React.ReactNode; tone?: string }) {
+  return (
+    <div className={`rounded-xl glass p-4 ${tone ?? ""}`}>
+      <div className="flex items-center justify-between">
+        <div className="text-[10px] font-mono uppercase text-muted-foreground">{label}</div>
+        {icon}
+      </div>
+      <div className="mt-1 font-display text-2xl font-bold text-gradient">{value}</div>
+    </div>
+  );
+}
+
+function Journal() {
+  const fetchJ = useServerFn(getJournal);
+  const refresh = useServerFn(updateJournalOutcomes);
+  const [data, setData] = useState<{ entries: Entry[]; stats: any } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+
+  async function load() {
+    setLoading(true);
+    try { setData((await fetchJ()) as any); } finally { setLoading(false); }
+  }
+  useEffect(() => { load(); }, []);
+
+  async function refreshOutcomes() {
+    setBusy(true);
+    try { await refresh(); await load(); } finally { setBusy(false); }
+  }
+
+  const stocks = (data?.entries ?? []).filter((e) => e.kind !== "etf");
+  const etfs = (data?.entries ?? []).filter((e) => e.kind === "etf");
+
+  return (
+    <div className="min-h-screen">
+      <SiteNav /><Ticker />
+      <div className="mx-auto max-w-7xl px-4 py-8">
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <div className="text-xs font-mono uppercase tracking-wider text-primary">Auto-logged AI Track Record</div>
+            <h1 className="mt-1 font-display text-3xl font-bold">Trade Journal</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Every recommendation is auto-saved here. Winner = price reached +30% from entry. Loser = still negative after 1 year.
+            </p>
+          </div>
+          <button onClick={refreshOutcomes} disabled={busy}
+            className="flex items-center gap-2 rounded-md bg-[var(--gradient-primary)] px-4 py-2 text-sm font-semibold !text-white glow disabled:opacity-60">
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            Refresh outcomes
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="grid gap-4 md:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-24 animate-pulse rounded-xl glass" />)}
+          </div>
+        ) : (
+          <>
+            <div className="mb-8 grid gap-4 md:grid-cols-4">
+              <Kpi label="Win rate" value={`${(((data?.stats.winRate ?? 0) * 100)).toFixed(0)}%`} icon={<Trophy className="h-4 w-4 text-success" />} />
+              <Kpi label="Winners" value={String(data?.stats.winners ?? 0)} icon={<Trophy className="h-4 w-4 text-success" />} />
+              <Kpi label="Losers" value={String(data?.stats.losers ?? 0)} icon={<TrendingDown className="h-4 w-4 text-destructive" />} />
+              <Kpi label="In progress" value={String(data?.stats.inProgress ?? 0)} icon={<Hourglass className="h-4 w-4 text-primary" />} />
+            </div>
+
+            <Section title="Overall picks log" icon={<BookOpen className="h-4 w-4 text-primary" />} entries={stocks} />
+            <Section title="Sector ETF & sector picks log" icon={<Layers className="h-4 w-4 text-primary" />} entries={etfs} />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
