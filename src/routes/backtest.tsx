@@ -178,7 +178,8 @@ function BacktestPage() {
                 </td></tr>
               )}
               {visible.map((t) => (
-                <>
+                <FragmentRow key={t.id} t={t} marking={marking} reason={reason} setMarking={setMarking} setReason={setReason} saveWrong={saveWrong} />
+              ))}
                   <tr key={t.id} className={`border-t border-border/60 hover:bg-secondary/20 ${t.marked_wrong ? "bg-destructive/5" : ""}`}>
                     <td className="px-3 py-2 font-mono font-semibold">
                       {t.symbol}
