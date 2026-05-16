@@ -74,6 +74,122 @@ export type Database = {
         }
         Relationships: []
       }
+      backtest_runs: {
+        Row: {
+          avg_return: number
+          finished_at: string | null
+          from_date: string
+          id: string
+          losers: number
+          notes: string | null
+          started_at: string
+          to_date: string
+          total_trades: number
+          win_rate: number
+          winners: number
+        }
+        Insert: {
+          avg_return?: number
+          finished_at?: string | null
+          from_date: string
+          id?: string
+          losers?: number
+          notes?: string | null
+          started_at?: string
+          to_date: string
+          total_trades?: number
+          win_rate?: number
+          winners?: number
+        }
+        Update: {
+          avg_return?: number
+          finished_at?: string | null
+          from_date?: string
+          id?: string
+          losers?: number
+          notes?: string | null
+          started_at?: string
+          to_date?: string
+          total_trades?: number
+          win_rate?: number
+          winners?: number
+        }
+        Relationships: []
+      }
+      backtest_trades: {
+        Row: {
+          bars_held: number | null
+          base_range_pct: number | null
+          created_at: string
+          entry_date: string
+          entry_price: number
+          exit_date: string | null
+          exit_price: number | null
+          id: string
+          marked_wrong: boolean
+          name: string | null
+          outcome: string
+          pattern: string | null
+          peak_price: number | null
+          return_pct: number | null
+          run_id: string | null
+          sector: string | null
+          symbol: string
+          wrong_marked_at: string | null
+          wrong_reason: string | null
+        }
+        Insert: {
+          bars_held?: number | null
+          base_range_pct?: number | null
+          created_at?: string
+          entry_date: string
+          entry_price: number
+          exit_date?: string | null
+          exit_price?: number | null
+          id?: string
+          marked_wrong?: boolean
+          name?: string | null
+          outcome?: string
+          pattern?: string | null
+          peak_price?: number | null
+          return_pct?: number | null
+          run_id?: string | null
+          sector?: string | null
+          symbol: string
+          wrong_marked_at?: string | null
+          wrong_reason?: string | null
+        }
+        Update: {
+          bars_held?: number | null
+          base_range_pct?: number | null
+          created_at?: string
+          entry_date?: string
+          entry_price?: number
+          exit_date?: string | null
+          exit_price?: number | null
+          id?: string
+          marked_wrong?: boolean
+          name?: string | null
+          outcome?: string
+          pattern?: string | null
+          peak_price?: number | null
+          return_pct?: number | null
+          run_id?: string | null
+          sector?: string | null
+          symbol?: string
+          wrong_marked_at?: string | null
+          wrong_reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "backtest_trades_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "backtest_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       journal_entries: {
         Row: {
           closed_at: string | null
