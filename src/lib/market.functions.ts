@@ -496,55 +496,194 @@ RULE: <one-line rule the scoring engine should remember>`;
     return { reply };
   });
 
-// Top sectors by the Sector AI agent's own sector_score (highest first).
-// Returns top 3 sectors with average sector_score and the top 3 stocks/ETFs in each.
+// Top sectors — uses the Sector AI heatmap ranking (mockData sectors sorted by
+// syncScore) so what shows on /sectors matches what shows on /picks. For each
+// top sector we pull the top stocks (by swing_score) from the latest rankings
+// run whose sector matches by name (case-insensitive substring either way).
 export const getTopSectors = createServerFn({ method: "GET" }).handler(async () => {
   const { data: lastRun } = await supabaseAdmin
     .from("agent_runs").select("*").eq("status", "success")
     .order("finished_at", { ascending: false }).limit(1).maybeSingle();
-  if (!lastRun) return { sectors: [] as any[] };
 
-  const { data: rk } = await supabaseAdmin
-    .from("rankings").select("*").eq("run_id", lastRun.id);
+  const { data: rk } = lastRun
+    ? await supabaseAdmin.from("rankings").select("*").eq("run_id", lastRun.id)
+    : { data: [] as any[] };
   const rows = rk ?? [];
 
-  // Pull universe to know kind (stock vs etf) per symbol
-  const { data: uni } = await supabaseAdmin.from("stock_universe").select("symbol, kind");
+  const { data: uni } = await supabaseAdmin.from("stock_universe").select("symbol, kind, sector");
   const kindMap = new Map((uni ?? []).map((u) => [u.symbol, u.kind ?? "stock"]));
 
-  const bySector = new Map<string, any[]>();
-  for (const r of rows) {
-    if (!r.sector || r.sector === "Index") continue;
-    if (!bySector.has(r.sector)) bySector.set(r.sector, []);
-    bySector.get(r.sector)!.push({ ...r, kind: kindMap.get(r.symbol) ?? "stock" });
-  }
+  const topSectorList = [...MOCK_SECTORS].sort((a, b) => b.syncScore - a.syncScore).slice(0, 3);
 
-  // Find a matching ETF for a sector (best-effort by sector name match in universe)
-  const etfForSector = new Map<string, any>();
-  for (const u of uni ?? []) {
-    if (u.kind !== "etf") continue;
-    const match = rows.find((r) => r.symbol === u.symbol);
-    if (match) etfForSector.set((match as any).sector ?? "", { ...match, kind: "etf" });
-  }
-  // Also pull ETF rows that may have no peers
-  const etfRows = rows.filter((r) => kindMap.get(r.symbol) === "etf");
-
-  const sectors = Array.from(bySector.entries())
-    .map(([sector, stocks]) => {
-      const avg = stocks.reduce((a, b) => a + (b.sector_score ?? 0), 0) / stocks.length;
-      const topStocks = [...stocks]
-        .filter((s) => s.kind === "stock")
-        .sort((a, b) => (b.swing_score ?? 0) - (a.swing_score ?? 0))
-        .slice(0, 3);
-      const etf =
-        etfRows.find((e) => (e.sector ?? "").toLowerCase() === sector.toLowerCase()) ?? null;
-      return { sector, avg_sector_score: Math.round(avg), stocks: topStocks, etf };
-    })
-    .sort((a, b) => b.avg_sector_score - a.avg_sector_score)
-    .slice(0, 3);
+  const sectors = topSectorList.map((s) => {
+    const needle = s.name.toLowerCase();
+    const matches = rows.filter((r) => {
+      const sec = (r.sector ?? "").toLowerCase();
+      return sec && (sec.includes(needle) || needle.includes(sec));
+    });
+    const topStocks = matches
+      .filter((m) => (kindMap.get(m.symbol) ?? "stock") === "stock")
+      .sort((a, b) => (b.swing_score ?? 0) - (a.swing_score ?? 0))
+      .slice(0, 3);
+    const etf = matches.find((m) => kindMap.get(m.symbol) === "etf") ?? null;
+    return {
+      sector: s.name,
+      avg_sector_score: s.syncScore,
+      monthly_trend: s.monthlyTrend,
+      rs: s.rs,
+      stocks: topStocks,
+      etf: etf ? { ...etf, kind: "etf" } : null,
+    };
+  });
 
   return { sectors };
 });
+
+// === Backtest (2000 → present) ===
+// Walk weekly candles for each stock in the universe, find consolidation→breakout
+// events using the same detector logic as the live engine, then track forward
+// 90-bar return. Persist trades so the user can mark wrong picks with reasons.
+const BacktestInput = z.object({
+  from: z.string().optional(),                   // YYYY-MM-DD; default 2000-01-01
+  symbols: z.array(z.string()).optional(),       // limit scan to subset
+  maxSymbols: z.number().int().min(1).max(200).optional(),
+});
+
+export const runBacktest = createServerFn({ method: "POST" })
+  .inputValidator((d) => BacktestInput.parse(d))
+  .handler(async ({ data }) => {
+    const fromDate = data.from ?? "2000-01-01";
+    const toDate = new Date().toISOString().slice(0, 10);
+
+    const { data: uni } = await supabaseAdmin
+      .from("stock_universe").select("symbol, yahoo_symbol, name, sector, kind, active")
+      .eq("active", true);
+    let universe = (uni ?? []).filter((u) => (u.kind ?? "stock") === "stock");
+    if (data.symbols?.length) {
+      const set = new Set(data.symbols.map((s) => s.toUpperCase()));
+      universe = universe.filter((u) => set.has(u.symbol.toUpperCase()));
+    }
+    if (data.maxSymbols) universe = universe.slice(0, data.maxSymbols);
+
+    const { data: runRow, error: runErr } = await supabaseAdmin
+      .from("backtest_runs")
+      .insert({ from_date: fromDate, to_date: toDate })
+      .select("*").single();
+    if (runErr || !runRow) throw runErr ?? new Error("backtest run create failed");
+
+    const allTrades: any[] = [];
+    const fromMs = new Date(fromDate).getTime();
+
+    for (const u of universe) {
+      const quote = await fetchYahooChart(u.yahoo_symbol, "max", "1wk");
+      if (!quote?.candles?.length) continue;
+      const candles = quote.candles.filter((c) => c.t * 1000 >= fromMs);
+      if (candles.length < 50) continue;
+
+      // Slide forward; whenever a new breakout fires (bars_since === 0), open a
+      // trade. Don't reopen while a trade is live.
+      let i = 40;
+      while (i < candles.length - 1) {
+        const window = candles.slice(0, i + 1);
+        const bk = detectBreakout(window, 30, 4);
+        if (bk.broke_out && bk.bars_since === 0) {
+          const entryBar = candles[i];
+          const entry = entryBar.c;
+          const baseHigh = bk.breakout_price;
+          const range = baseHigh ? ((baseHigh - Math.min(...candles.slice(Math.max(0, i - 30), i).map((c) => c.l))) / baseHigh) * 100 : 0;
+          // Forward window — up to 90 bars (~weeks) or until +30% / -15% stop.
+          let peak = entry, exitIdx = i, exitPrice = entry;
+          for (let j = i + 1; j < Math.min(candles.length, i + 91); j++) {
+            const c = candles[j];
+            peak = Math.max(peak, c.h);
+            exitIdx = j; exitPrice = c.c;
+            if (c.h >= entry * 1.30) { exitPrice = entry * 1.30; break; }
+            if (c.l <= entry * 0.85) { exitPrice = entry * 0.85; break; }
+          }
+          const ret = ((exitPrice - entry) / entry) * 100;
+          const outcome = ret >= 30 ? "winner" : ret <= -10 ? "loser" : "neutral";
+          allTrades.push({
+            run_id: runRow.id, symbol: u.symbol, name: u.name, sector: u.sector,
+            entry_date: new Date(entryBar.t * 1000).toISOString().slice(0, 10),
+            entry_price: Number(entry.toFixed(2)),
+            exit_date: new Date(candles[exitIdx].t * 1000).toISOString().slice(0, 10),
+            exit_price: Number(exitPrice.toFixed(2)),
+            peak_price: Number(peak.toFixed(2)),
+            return_pct: Number(ret.toFixed(2)),
+            bars_held: exitIdx - i,
+            outcome,
+            pattern: "weekly_consolidation_breakout",
+            base_range_pct: Number(range.toFixed(2)),
+          });
+          i = exitIdx + 1; // skip past this trade
+        } else {
+          i++;
+        }
+      }
+    }
+
+    if (allTrades.length) {
+      // Insert in batches of 500 to avoid payload limits
+      for (let k = 0; k < allTrades.length; k += 500) {
+        await supabaseAdmin.from("backtest_trades").insert(allTrades.slice(k, k + 500));
+      }
+    }
+
+    const winners = allTrades.filter((t) => t.outcome === "winner").length;
+    const losers = allTrades.filter((t) => t.outcome === "loser").length;
+    const decided = winners + losers;
+    const avgReturn = allTrades.length
+      ? allTrades.reduce((a, t) => a + (t.return_pct ?? 0), 0) / allTrades.length : 0;
+    const winRate = decided ? winners / decided : 0;
+
+    await supabaseAdmin.from("backtest_runs").update({
+      finished_at: new Date().toISOString(),
+      total_trades: allTrades.length,
+      winners, losers,
+      win_rate: Number(winRate.toFixed(4)),
+      avg_return: Number(avgReturn.toFixed(2)),
+    }).eq("id", runRow.id);
+
+    return { runId: runRow.id, total: allTrades.length, winners, losers, winRate, avgReturn };
+  });
+
+export const getBacktestRuns = createServerFn({ method: "GET" }).handler(async () => {
+  const { data } = await supabaseAdmin
+    .from("backtest_runs").select("*")
+    .order("started_at", { ascending: false }).limit(20);
+  return { runs: data ?? [] };
+});
+
+export const getBacktestTrades = createServerFn({ method: "GET" })
+  .inputValidator((d: { runId?: string }) => d)
+  .handler(async ({ data }) => {
+    let q = supabaseAdmin.from("backtest_trades").select("*")
+      .order("entry_date", { ascending: false }).limit(2000);
+    if (data.runId) q = q.eq("run_id", data.runId);
+    const { data: trades } = await q;
+    return { trades: trades ?? [] };
+  });
+
+export const markBacktestTradeWrong = createServerFn({ method: "POST" })
+  .inputValidator((d: { id: string; reason: string }) => d)
+  .handler(async ({ data }) => {
+    if (!data.reason?.trim()) throw new Error("reason required");
+    await supabaseAdmin.from("backtest_trades").update({
+      marked_wrong: true, wrong_reason: data.reason.trim(),
+      wrong_marked_at: new Date().toISOString(),
+    }).eq("id", data.id);
+    // Save as feedback so future scoring can learn from it.
+    const { data: t } = await supabaseAdmin.from("backtest_trades")
+      .select("symbol, sector, entry_date, return_pct, outcome").eq("id", data.id).maybeSingle();
+    await supabaseAdmin.from("agent_feedback").insert({
+      agent: "backtest",
+      role: "user",
+      message: `WRONG PICK: ${t?.symbol} (${t?.sector}) on ${t?.entry_date} — outcome ${t?.outcome} (${t?.return_pct}%). Reason: ${data.reason.trim()}`,
+      context: { trade_id: data.id, trade: t },
+    });
+    return { ok: true };
+  });
+
 
 // === Journal ===
 export const getJournal = createServerFn({ method: "GET" }).handler(async () => {
