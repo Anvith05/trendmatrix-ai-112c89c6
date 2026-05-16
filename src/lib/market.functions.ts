@@ -5,6 +5,8 @@ import {
   combine, detectBreakout, scoreFundamental, scoreMacro, scoreMonthly, scoreRS, scoreVolume, scoreWeekly,
   TOP_PICK_SWING_THRESHOLD,
 } from "./agents.server";
+import { sectors as MOCK_SECTORS } from "./mockData";
+import { z } from "zod";
 
 // Load human-curated rules captured in agent_feedback (role='rule' or
 // role='user') for a given agent. Returns text snippets the AI / scoring
