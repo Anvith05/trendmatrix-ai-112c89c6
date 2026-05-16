@@ -180,56 +180,72 @@ function BacktestPage() {
               {visible.map((t) => (
                 <FragmentRow key={t.id} t={t} marking={marking} reason={reason} setMarking={setMarking} setReason={setReason} saveWrong={saveWrong} />
               ))}
-                  <tr key={t.id} className={`border-t border-border/60 hover:bg-secondary/20 ${t.marked_wrong ? "bg-destructive/5" : ""}`}>
-                    <td className="px-3 py-2 font-mono font-semibold">
-                      {t.symbol}
-                      <div className="text-[10px] font-normal text-muted-foreground">{t.name}</div>
-                    </td>
-                    <td className="px-3 py-2 text-xs text-muted-foreground">{t.sector ?? "—"}</td>
-                    <td className="px-3 py-2 text-xs text-muted-foreground">{t.entry_date} → {t.exit_date ?? "—"}</td>
-                    <td className="px-3 py-2 font-mono">₹{Number(t.entry_price).toFixed(2)}</td>
-                    <td className="px-3 py-2 font-mono">{t.exit_price ? `₹${Number(t.exit_price).toFixed(2)}` : "—"}</td>
-                    <td className={`px-3 py-2 font-mono ${(t.return_pct ?? 0) >= 0 ? "text-success" : "text-destructive"}`}>
-                      {fmtPct(t.return_pct)}
-                    </td>
-                    <td className="px-3 py-2 text-xs">{t.bars_held ?? "—"}</td>
-                    <td className="px-3 py-2">
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-mono uppercase ${
-                        t.outcome === "winner" ? "bg-success/15 text-success"
-                        : t.outcome === "loser" ? "bg-destructive/15 text-destructive"
-                        : "bg-muted text-muted-foreground"
-                      }`}>{t.outcome}</span>
-                    </td>
-                    <td className="px-3 py-2">
-                      {t.marked_wrong ? (
-                        <span className="rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] font-mono uppercase text-destructive">marked wrong</span>
-                      ) : (
-                        <button onClick={() => { setMarking(t.id); setReason(""); }}
-                          className="inline-flex items-center gap-1 rounded-md border border-destructive/40 px-2 py-1 text-[11px] text-destructive hover:bg-destructive/10">
-                          <Flag className="h-3 w-3" /> Mark wrong
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                  {marking === t.id && (
-                    <tr className="border-t border-destructive/30 bg-destructive/5">
-                      <td colSpan={9} className="px-3 py-3">
-                        <div className="flex items-start gap-2">
-                          <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2}
-                            placeholder="Why was this pick wrong? e.g. base too short, breakout was fake, news-driven spike…"
-                            className="flex-1 rounded-md border border-border bg-card px-2 py-1.5 text-xs" />
-                          <button onClick={() => saveWrong(t.id)} disabled={!reason.trim()}
-                            className="rounded-md bg-destructive px-3 py-1.5 text-[11px] font-semibold !text-white disabled:opacity-50">
-                            Save & train
-                          </button>
-                          <button onClick={() => setMarking(null)} className="rounded-md border border-border px-2 py-1.5"><X className="h-3 w-3" /></button>
-                        </div>
-                        {t.wrong_reason && <div className="mt-1 text-[10px] text-muted-foreground">Existing reason: {t.wrong_reason}</div>}
-                      </td>
-                    </tr>
-                  )}
-                </>
-              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FragmentRow({ t, marking, reason, setMarking, setReason, saveWrong }: {
+  t: Trade; marking: string | null; reason: string;
+  setMarking: (id: string | null) => void; setReason: (s: string) => void;
+  saveWrong: (id: string) => void;
+}) {
+  return (
+    <>
+      <tr className={`border-t border-border/60 hover:bg-secondary/20 ${t.marked_wrong ? "bg-destructive/5" : ""}`}>
+        <td className="px-3 py-2 font-mono font-semibold">
+          {t.symbol}
+          <div className="text-[10px] font-normal text-muted-foreground">{t.name}</div>
+        </td>
+        <td className="px-3 py-2 text-xs text-muted-foreground">{t.sector ?? "—"}</td>
+        <td className="px-3 py-2 text-xs text-muted-foreground">{t.entry_date} → {t.exit_date ?? "—"}</td>
+        <td className="px-3 py-2 font-mono">₹{Number(t.entry_price).toFixed(2)}</td>
+        <td className="px-3 py-2 font-mono">{t.exit_price ? `₹${Number(t.exit_price).toFixed(2)}` : "—"}</td>
+        <td className={`px-3 py-2 font-mono ${(t.return_pct ?? 0) >= 0 ? "text-success" : "text-destructive"}`}>
+          {fmtPct(t.return_pct)}
+        </td>
+        <td className="px-3 py-2 text-xs">{t.bars_held ?? "—"}</td>
+        <td className="px-3 py-2">
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-mono uppercase ${
+            t.outcome === "winner" ? "bg-success/15 text-success"
+            : t.outcome === "loser" ? "bg-destructive/15 text-destructive"
+            : "bg-muted text-muted-foreground"
+          }`}>{t.outcome}</span>
+        </td>
+        <td className="px-3 py-2">
+          {t.marked_wrong ? (
+            <span className="rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] font-mono uppercase text-destructive">marked wrong</span>
+          ) : (
+            <button onClick={() => { setMarking(t.id); setReason(""); }}
+              className="inline-flex items-center gap-1 rounded-md border border-destructive/40 px-2 py-1 text-[11px] text-destructive hover:bg-destructive/10">
+              <Flag className="h-3 w-3" /> Mark wrong
+            </button>
+          )}
+        </td>
+      </tr>
+      {marking === t.id && (
+        <tr className="border-t border-destructive/30 bg-destructive/5">
+          <td colSpan={9} className="px-3 py-3">
+            <div className="flex items-start gap-2">
+              <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2}
+                placeholder="Why was this pick wrong? e.g. base too short, breakout was fake, news-driven spike…"
+                className="flex-1 rounded-md border border-border bg-card px-2 py-1.5 text-xs" />
+              <button onClick={() => saveWrong(t.id)} disabled={!reason.trim()}
+                className="rounded-md bg-destructive px-3 py-1.5 text-[11px] font-semibold !text-white disabled:opacity-50">
+                Save & train
+              </button>
+              <button onClick={() => setMarking(null)} className="rounded-md border border-border px-2 py-1.5"><X className="h-3 w-3" /></button>
+            </div>
+            {t.wrong_reason && <div className="mt-1 text-[10px] text-muted-foreground">Existing reason: {t.wrong_reason}</div>}
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
             </tbody>
           </table>
         </div>
