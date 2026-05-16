@@ -246,13 +246,6 @@ function FragmentRow({ t, marking, reason, setMarking, setReason, saveWrong }: {
     </>
   );
 }
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function Kpi({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
   return (
