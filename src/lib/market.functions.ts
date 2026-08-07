@@ -763,6 +763,17 @@ export const updateJournalOutcomes = createServerFn({ method: "POST" }).handler(
       closed_at: closed_at ?? e.closed_at,
       last_checked_at: new Date().toISOString(),
     }).eq("id", e.id);
+    // close out the live recommendation too, so the pick stops being shown
+    if (closed_at && e.recommendation_id) {
+      await supabaseAdmin.from("recommendations").update({
+        status: "archived",
+        outcome: status === "winner" ? "target_hit" : "failed",
+        archived_at: closed_at,
+        removed_reason: status === "winner"
+          ? `Target +10% hit in ${Math.max(1, Math.round(ageMs / 86400000))} days`
+          : "No target after 3 months, closed in loss",
+      }).eq("id", e.recommendation_id);
+    }
   }
   return { checked: entries?.length ?? 0, promoted, busted, updated };
 });

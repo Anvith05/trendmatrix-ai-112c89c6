@@ -32,6 +32,19 @@ function pct(cur: number | null, entry: number) {
   return ((cur - entry) / entry) * 100;
 }
 
+function daysBetween(from: string, to: string | null) {
+  const end = to ? new Date(to).getTime() : Date.now();
+  return Math.max(0, Math.round((end - new Date(from).getTime()) / 86400000));
+}
+
+function humanDays(d: number) {
+  if (d < 1) return "same day";
+  if (d < 30) return `${d}d`;
+  const m = Math.floor(d / 30);
+  const rem = d % 30;
+  return rem ? `${m}mo ${rem}d` : `${m}mo`;
+}
+
 function StatusBadge({ s }: { s: string }) {
   if (s === "winner") return <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-mono uppercase text-success">winner</span>;
   if (s === "loser") return <span className="rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] font-mono uppercase text-destructive">loser</span>;
@@ -60,11 +73,12 @@ function Section({ title, icon, entries }: { title: string; icon: React.ReactNod
               <th className="px-3 py-2">P/L</th>
               <th className="px-3 py-2">Status</th>
               <th className="px-3 py-2">Closed</th>
+              <th className="px-3 py-2">Time held</th>
             </tr>
           </thead>
           <tbody>
             {entries.length === 0 && (
-              <tr><td colSpan={10} className="px-3 py-8 text-center text-muted-foreground">No entries yet.</td></tr>
+              <tr><td colSpan={11} className="px-3 py-8 text-center text-muted-foreground">No entries yet.</td></tr>
             )}
             {entries.map((e) => {
               const p = pct(e.current_price, e.entry_price);
@@ -91,6 +105,10 @@ function Section({ title, icon, entries }: { title: string; icon: React.ReactNod
                   </td>
                   <td className="px-3 py-2"><StatusBadge s={e.status} /></td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{fmt(e.closed_at)}</td>
+                  <td className="px-3 py-2 font-mono text-xs">
+                    {humanDays(daysBetween(e.suggested_at, e.closed_at))}
+                    {!e.closed_at && <span className="ml-1 text-[10px] text-muted-foreground">running</span>}
+                  </td>
                 </tr>
               );
             })}
@@ -138,7 +156,13 @@ function Journal() {
     setLoading(true);
     try { setData((await fetchJ()) as any); } finally { setLoading(false); }
   }
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    // auto-close trades that hit +10% before showing the log
+    (async () => {
+      try { await refresh(); } catch { /* ignore */ }
+      await load();
+    })();
+  }, []);
 
   async function refreshOutcomes() {
     setBusy(true);
@@ -154,6 +178,10 @@ function Journal() {
   );
 
   const avgReturn = Number(data?.stats?.avgReturn ?? 0);
+  const closedWins = all.filter((e) => e.status === "winner" && e.closed_at);
+  const avgDays = closedWins.length
+    ? Math.round(closedWins.reduce((s, e) => s + daysBetween(e.suggested_at, e.closed_at), 0) / closedWins.length)
+    : null;
   const filters: { key: Filter; label: string; count: number }[] = [
     { key: "all", label: "All", count: all.length },
     { key: "winners", label: "Winners", count: all.filter(isWinner).length },
@@ -186,9 +214,10 @@ function Journal() {
           </div>
         ) : (
           <>
-            <div className="mb-6 grid gap-4 md:grid-cols-5">
+            <div className="mb-6 grid gap-4 md:grid-cols-6">
               <Kpi label="Win rate" value={`${(((data?.stats.winRate ?? 0) * 100)).toFixed(0)}%`} icon={<Trophy className="h-4 w-4 text-success" />} />
               <Kpi label="Avg return" value={`${avgReturn >= 0 ? "+" : ""}${avgReturn.toFixed(1)}%`} icon={<Percent className="h-4 w-4 text-primary" />} />
+              <Kpi label="Avg time to target" value={avgDays == null ? "—" : humanDays(avgDays)} icon={<Hourglass className="h-4 w-4 text-primary" />} />
               <Kpi label="Winners" value={String(filters[1]!.count)} icon={<Trophy className="h-4 w-4 text-success" />} />
               <Kpi label="Losers" value={String(filters[2]!.count)} icon={<TrendingDown className="h-4 w-4 text-destructive" />} />
               <Kpi label="In progress" value={String(data?.stats.inProgress ?? 0)} icon={<Hourglass className="h-4 w-4 text-primary" />} />
