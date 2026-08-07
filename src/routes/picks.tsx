@@ -26,9 +26,11 @@ type Rec = {
   recommended_at: string; archived_at: string | null; expires_at: string;
 };
 
-function fmtDate(s: string) {
+function _fmtDate(s: string) {
   return new Date(s).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
 }
+void _fmtDate;
+
 
 function timeLeft(expires: string) {
   const ms = new Date(expires).getTime() - Date.now();
