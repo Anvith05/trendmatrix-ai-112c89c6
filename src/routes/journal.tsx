@@ -156,7 +156,13 @@ function Journal() {
     setLoading(true);
     try { setData((await fetchJ()) as any); } finally { setLoading(false); }
   }
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    // auto-close trades that hit +10% before showing the log
+    (async () => {
+      try { await refresh(); } catch { /* ignore */ }
+      await load();
+    })();
+  }, []);
 
   async function refreshOutcomes() {
     setBusy(true);
