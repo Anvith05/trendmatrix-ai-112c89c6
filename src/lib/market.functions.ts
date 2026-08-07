@@ -305,13 +305,21 @@ export const runAgents = createServerFn({ method: "POST" })
         .sort((a, b) => b.quality - a.quality)
         .slice(0, 5);
 
-      // 3) Fetch currently-active symbols to avoid duplicates
+      // 3) Fetch currently-active + still-running journal symbols to avoid
+      //    re-suggesting a stock that is already in flight. A symbol becomes
+      //    eligible again only once its trade closes (target hit / graded).
       const { data: activeRows } = await supabaseAdmin
         .from("recommendations").select("symbol").eq("status", "active");
-      const activeSet = new Set((activeRows ?? []).map((r) => r.symbol));
+      const { data: runningRows } = await supabaseAdmin
+        .from("journal_entries").select("symbol").eq("status", "in_progress");
+      const activeSet = new Set([
+        ...(activeRows ?? []).map((r) => r.symbol),
+        ...(runningRows ?? []).map((r) => r.symbol),
+      ]);
 
       const newPicks = candidates
         .filter(({ x }) => !activeSet.has(x.u.symbol))
+
         .map(({ x, s }) => ({
           symbol: x.u.symbol, name: x.u.name, sector: x.u.sector,
           ltp: x.q.ltp,
