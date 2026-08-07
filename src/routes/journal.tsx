@@ -178,6 +178,10 @@ function Journal() {
   );
 
   const avgReturn = Number(data?.stats?.avgReturn ?? 0);
+  const closedWins = all.filter((e) => e.status === "winner" && e.closed_at);
+  const avgDays = closedWins.length
+    ? Math.round(closedWins.reduce((s, e) => s + daysBetween(e.suggested_at, e.closed_at), 0) / closedWins.length)
+    : null;
   const filters: { key: Filter; label: string; count: number }[] = [
     { key: "all", label: "All", count: all.length },
     { key: "winners", label: "Winners", count: all.filter(isWinner).length },
