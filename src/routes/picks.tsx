@@ -40,21 +40,18 @@ function timeLeft(expires: string) {
 function Picks() {
   const fetchRecs = useServerFn(getRecommendations);
   const fetchRankings = useServerFn(getLatestRankings);
-  const fetchTopSectors = useServerFn(getTopSectors);
   const runAgentsFn = useServerFn(runAgents);
   const [data, setData] = useState<{ active: Rec[]; history: Rec[] } | null>(null);
   const [, setRankings] = useState<any[]>([]); // kept for future use
-  const [topSectors, setTopSectors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   async function load() {
     setLoading(true);
     try {
-      const [recs, rk, ts] = await Promise.all([fetchRecs(), fetchRankings(), fetchTopSectors()]);
+      const [recs, rk] = await Promise.all([fetchRecs(), fetchRankings()]);
       setData(recs);
       setRankings((rk as any)?.rankings ?? []);
-      setTopSectors((ts as any)?.sectors ?? []);
     } finally { setLoading(false); }
   }
   useEffect(() => { load(); }, []);
@@ -65,8 +62,6 @@ function Picks() {
     finally { setRefreshing(false); }
   }
 
-  // sector buckets now come from getTopSectors (ranks by sector AI agent score)
-  const sectorBuckets = topSectors;
 
   return (
     <div className="min-h-screen">
