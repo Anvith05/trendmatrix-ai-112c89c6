@@ -3,9 +3,10 @@ import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { SiteNav } from "@/components/SiteNav";
 import { Ticker } from "@/components/Ticker";
-import { getLatestRankings, getQuote, getRecommendations, getTopSectors, removePick, runAgents } from "@/lib/market.functions";
+import { getLatestRankings, getQuote, getRecommendations, removePick, runAgents } from "@/lib/market.functions";
 import { supabase } from "@/integrations/supabase/client";
-import { Sparkles, History, TrendingUp, Loader2, RefreshCw, ArrowRight, Trash2, Upload, X, Layers } from "lucide-react";
+import { Sparkles, TrendingUp, Loader2, RefreshCw, ArrowRight, Trash2, Upload, X } from "lucide-react";
+
 
 export const Route = createFileRoute("/picks")({
   component: Picks,
@@ -25,9 +26,11 @@ type Rec = {
   recommended_at: string; archived_at: string | null; expires_at: string;
 };
 
-function fmtDate(s: string) {
+function _fmtDate(s: string) {
   return new Date(s).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
 }
+void _fmtDate;
+
 
 function timeLeft(expires: string) {
   const ms = new Date(expires).getTime() - Date.now();
@@ -40,21 +43,18 @@ function timeLeft(expires: string) {
 function Picks() {
   const fetchRecs = useServerFn(getRecommendations);
   const fetchRankings = useServerFn(getLatestRankings);
-  const fetchTopSectors = useServerFn(getTopSectors);
   const runAgentsFn = useServerFn(runAgents);
   const [data, setData] = useState<{ active: Rec[]; history: Rec[] } | null>(null);
   const [, setRankings] = useState<any[]>([]); // kept for future use
-  const [topSectors, setTopSectors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   async function load() {
     setLoading(true);
     try {
-      const [recs, rk, ts] = await Promise.all([fetchRecs(), fetchRankings(), fetchTopSectors()]);
+      const [recs, rk] = await Promise.all([fetchRecs(), fetchRankings()]);
       setData(recs);
       setRankings((rk as any)?.rankings ?? []);
-      setTopSectors((ts as any)?.sectors ?? []);
     } finally { setLoading(false); }
   }
   useEffect(() => { load(); }, []);
@@ -65,8 +65,6 @@ function Picks() {
     finally { setRefreshing(false); }
   }
 
-  // sector buckets now come from getTopSectors (ranks by sector AI agent score)
-  const sectorBuckets = topSectors;
 
   return (
     <div className="min-h-screen">
@@ -118,124 +116,12 @@ function Picks() {
           )}
         </section>
 
-        {/* Top sector picks */}
-        <section className="mb-10">
-          <div className="mb-3 flex items-center gap-2">
-            <Layers className="h-4 w-4 text-primary" />
-            <h2 className="font-display text-lg font-semibold">Top sector picks</h2>
-            <span className="rounded-full border border-border px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
-              top 3 sectors
-            </span>
-            <span className="text-[10px] font-mono text-muted-foreground">best stocks from the strongest-syncing sectors</span>
-          </div>
-
-          {loading ? (
-            <div className="grid gap-4 md:grid-cols-3">
-              {Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-48 animate-pulse rounded-xl glass" />)}
-            </div>
-          ) : sectorBuckets.length === 0 ? (
-            <div className="rounded-xl glass p-8 text-center text-sm text-muted-foreground">
-              No sector data yet. Run agents to score sectors.
-            </div>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-3">
-              {sectorBuckets.map((b: any) => (
-                <div key={b.sector} className="rounded-xl glass p-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <div>
-                      <div className="text-[10px] font-mono uppercase text-muted-foreground">Sector</div>
-                      <div className="font-display text-base font-semibold">{b.sector}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-mono text-2xl font-bold text-gradient">{b.avg_sector_score}</div>
-                      <div className="text-[10px] font-mono uppercase text-muted-foreground">sector AI score</div>
-                    </div>
-                  </div>
-                  {b.etf && (
-                    <Link to="/research" className="mb-2 flex items-center justify-between rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-sm hover:border-primary">
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono font-semibold">{b.etf.symbol}</span>
-                          <span className="rounded-full bg-primary/20 px-1.5 py-0.5 text-[9px] font-mono uppercase text-primary">ETF play</span>
-                        </div>
-                        <div className="text-[10px] text-muted-foreground">sector index proxy</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-mono text-lg font-bold text-gradient">{b.etf.swing_score}</div>
-                        <div className="text-[10px] font-mono text-muted-foreground">₹{Number(b.etf.ltp ?? 0).toFixed(2)}</div>
-                      </div>
-                    </Link>
-                  )}
-                  <div className="space-y-2">
-                    {(b.stocks ?? []).map((r: any) => (
-                      <Link key={r.id} to="/research" className="flex items-center justify-between rounded-md border border-border/60 bg-card/40 px-3 py-2 text-sm hover:border-primary/40">
-                        <div>
-                          <div className="font-mono font-semibold">{r.symbol}</div>
-                          <div className="text-[10px] text-muted-foreground">M {r.monthly_score} · W {r.weekly_score} · RS {r.rs_score}</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="font-mono text-lg font-bold text-gradient">{r.swing_score}</div>
-                          <div className="text-[10px] font-mono text-muted-foreground">₹{Number(r.ltp ?? 0).toFixed(2)}</div>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* History */}
-        <section>
-          <div className="mb-3 flex items-center gap-2">
-            <History className="h-4 w-4 text-muted-foreground" />
-            <h2 className="font-display text-lg font-semibold">Past recommendations</h2>
-            <span className="rounded-full border border-border px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
-              {data?.history.length ?? 0}
-            </span>
-          </div>
-          <div className="overflow-hidden rounded-xl glass">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-secondary/40 text-xs font-mono uppercase text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-2">Symbol</th>
-                  <th className="px-4 py-2">Sector</th>
-                  <th className="px-4 py-2">Entry</th>
-                  <th className="px-4 py-2">Score</th>
-                  <th className="px-4 py-2">Recommended</th>
-                  <th className="px-4 py-2">Archived</th>
-                  <th className="px-4 py-2">Outcome</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(data?.history ?? []).map((r) => (
-                  <tr key={r.id} className="border-t border-border/60 hover:bg-secondary/20">
-                    <td className="px-4 py-2 font-mono font-semibold">
-                      <Link to="/research" className="hover:text-primary">{r.symbol}</Link>
-                      <div className="text-[10px] font-normal text-muted-foreground">{r.name}</div>
-                    </td>
-                    <td className="px-4 py-2 text-xs text-muted-foreground">{r.sector}</td>
-                    <td className="px-4 py-2 font-mono">₹{Number(r.entry_price ?? 0).toFixed(2)}</td>
-                    <td className="px-4 py-2 font-mono">{r.swing_score}</td>
-                    <td className="px-4 py-2 text-xs text-muted-foreground">{fmtDate(r.recommended_at)}</td>
-                    <td className="px-4 py-2 text-xs text-muted-foreground">{r.archived_at ? fmtDate(r.archived_at) : "—"}</td>
-                    <td className="px-4 py-2">
-                      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-mono uppercase">{r.outcome ?? "—"}</span>
-                    </td>
-                  </tr>
-                ))}
-                {(!data || data.history.length === 0) && (
-                  <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-muted-foreground">No archived picks yet.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
       </div>
     </div>
   );
 }
+
+
 
 function PickCard({ r, onRemoved }: { r: Rec; onRemoved: () => void }) {
   const removeFn = useServerFn(removePick);

@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { SiteNav } from "@/components/SiteNav";
 import { Ticker } from "@/components/Ticker";
 import { getJournal, updateJournalOutcomes } from "@/lib/market.functions";
-import { BookOpen, Loader2, RefreshCw, Trophy, TrendingDown, Hourglass, Layers } from "lucide-react";
+import { BookOpen, Loader2, RefreshCw, Trophy, TrendingDown, Hourglass, Percent } from "lucide-react";
 
 export const Route = createFileRoute("/journal")({
   component: Journal,
@@ -55,7 +55,7 @@ function Section({ title, icon, entries }: { title: string; icon: React.ReactNod
               <th className="px-3 py-2">Kind</th>
               <th className="px-3 py-2">Suggested</th>
               <th className="px-3 py-2">Entry</th>
-              <th className="px-3 py-2">Target (+30%)</th>
+              <th className="px-3 py-2">Target (+10%)</th>
               <th className="px-3 py-2">Current</th>
               <th className="px-3 py-2">P/L</th>
               <th className="px-3 py-2">Status</th>
@@ -68,17 +68,23 @@ function Section({ title, icon, entries }: { title: string; icon: React.ReactNod
             )}
             {entries.map((e) => {
               const p = pct(e.current_price, e.entry_price);
+              const target = e.entry_price ? e.entry_price * 1.1 : null;
               return (
                 <tr key={e.id} className="border-t border-border/60 hover:bg-secondary/20">
                   <td className="px-3 py-2 font-mono font-semibold">
-                    {e.symbol}
+                    <div className="flex items-center gap-1.5">
+                      {e.symbol}
+                      {e.kind === "etf" && (
+                        <span className="rounded-full bg-primary/20 px-1.5 py-0.5 text-[9px] font-mono uppercase text-primary">ETF</span>
+                      )}
+                    </div>
                     <div className="text-[10px] font-normal text-muted-foreground">{e.name}</div>
                   </td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{e.sector ?? "—"}</td>
                   <td className="px-3 py-2 text-[10px] uppercase">{e.kind}</td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{fmt(e.suggested_at)}</td>
                   <td className="px-3 py-2 font-mono">₹{Number(e.entry_price).toFixed(2)}</td>
-                  <td className="px-3 py-2 font-mono text-muted-foreground">{e.target_price ? `₹${Number(e.target_price).toFixed(2)}` : "—"}</td>
+                  <td className="px-3 py-2 font-mono text-muted-foreground">{target ? `₹${target.toFixed(2)}` : "—"}</td>
                   <td className="px-3 py-2 font-mono">{e.current_price ? `₹${Number(e.current_price).toFixed(2)}` : "—"}</td>
                   <td className={`px-3 py-2 font-mono ${p == null ? "" : p >= 0 ? "text-success" : "text-destructive"}`}>
                     {p == null ? "—" : `${p >= 0 ? "+" : ""}${p.toFixed(1)}%`}
@@ -107,12 +113,26 @@ function Kpi({ label, value, icon, tone }: { label: string; value: string; icon:
   );
 }
 
+type Filter = "all" | "winners" | "losers" | "in_progress";
+
+function retPct(e: Entry) {
+  const p = pct(e.current_price, e.entry_price);
+  return p ?? 0;
+}
+function isWinner(e: Entry) {
+  return e.status === "winner" || (e.status === "in_progress" && retPct(e) > 0);
+}
+function isLoser(e: Entry) {
+  return e.status === "loser" || (e.status === "in_progress" && retPct(e) < 0);
+}
+
 function Journal() {
   const fetchJ = useServerFn(getJournal);
   const refresh = useServerFn(updateJournalOutcomes);
   const [data, setData] = useState<{ entries: Entry[]; stats: any } | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [filter, setFilter] = useState<Filter>("all");
 
   async function load() {
     setLoading(true);
@@ -125,8 +145,21 @@ function Journal() {
     try { await refresh(); await load(); } finally { setBusy(false); }
   }
 
-  const stocks = (data?.entries ?? []).filter((e) => e.kind !== "etf");
-  const etfs = (data?.entries ?? []).filter((e) => e.kind === "etf");
+  const all = data?.entries ?? [];
+  const shown = all.filter((e) =>
+    filter === "all" ? true
+    : filter === "winners" ? isWinner(e)
+    : filter === "losers" ? isLoser(e)
+    : e.status === "in_progress",
+  );
+
+  const avgReturn = Number(data?.stats?.avgReturn ?? 0);
+  const filters: { key: Filter; label: string; count: number }[] = [
+    { key: "all", label: "All", count: all.length },
+    { key: "winners", label: "Winners", count: all.filter(isWinner).length },
+    { key: "losers", label: "Losers", count: all.filter(isLoser).length },
+    { key: "in_progress", label: "In progress", count: all.filter((e) => e.status === "in_progress").length },
+  ];
 
   return (
     <div className="min-h-screen">
@@ -137,7 +170,7 @@ function Journal() {
             <div className="text-xs font-mono uppercase tracking-wider text-primary">Auto-logged AI Track Record</div>
             <h1 className="mt-1 font-display text-3xl font-bold">Trade Journal</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Every recommendation is auto-saved here. Winner = price reached +30% from entry. Loser = still negative after 1 year.
+              Every recommendation is auto-saved here. Target = +10% within 3 months. Running trades in profit count as winners, running trades in loss count as losers.
             </p>
           </div>
           <button onClick={refreshOutcomes} disabled={busy}
@@ -153,18 +186,32 @@ function Journal() {
           </div>
         ) : (
           <>
-            <div className="mb-8 grid gap-4 md:grid-cols-4">
+            <div className="mb-6 grid gap-4 md:grid-cols-5">
               <Kpi label="Win rate" value={`${(((data?.stats.winRate ?? 0) * 100)).toFixed(0)}%`} icon={<Trophy className="h-4 w-4 text-success" />} />
-              <Kpi label="Winners" value={String(data?.stats.winners ?? 0)} icon={<Trophy className="h-4 w-4 text-success" />} />
-              <Kpi label="Losers" value={String(data?.stats.losers ?? 0)} icon={<TrendingDown className="h-4 w-4 text-destructive" />} />
+              <Kpi label="Avg return" value={`${avgReturn >= 0 ? "+" : ""}${avgReturn.toFixed(1)}%`} icon={<Percent className="h-4 w-4 text-primary" />} />
+              <Kpi label="Winners" value={String(filters[1]!.count)} icon={<Trophy className="h-4 w-4 text-success" />} />
+              <Kpi label="Losers" value={String(filters[2]!.count)} icon={<TrendingDown className="h-4 w-4 text-destructive" />} />
               <Kpi label="In progress" value={String(data?.stats.inProgress ?? 0)} icon={<Hourglass className="h-4 w-4 text-primary" />} />
             </div>
 
-            <Section title="Overall picks log" icon={<BookOpen className="h-4 w-4 text-primary" />} entries={stocks} />
-            <Section title="Sector ETF & sector picks log" icon={<Layers className="h-4 w-4 text-primary" />} entries={etfs} />
+            <div className="mb-4 flex flex-wrap gap-2">
+              {filters.map((f) => (
+                <button key={f.key} onClick={() => setFilter(f.key)}
+                  className={`rounded-full border px-3 py-1 text-xs font-mono uppercase transition ${
+                    filter === f.key
+                      ? "border-primary bg-primary/15 text-primary"
+                      : "border-border text-muted-foreground hover:border-primary/40"
+                  }`}>
+                  {f.label} <span className="opacity-70">{f.count}</span>
+                </button>
+              ))}
+            </div>
+
+            <Section title="Picks log (stocks & ETFs)" icon={<BookOpen className="h-4 w-4 text-primary" />} entries={shown} />
           </>
         )}
       </div>
     </div>
   );
 }
+

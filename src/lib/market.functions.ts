@@ -305,13 +305,21 @@ export const runAgents = createServerFn({ method: "POST" })
         .sort((a, b) => b.quality - a.quality)
         .slice(0, 5);
 
-      // 3) Fetch currently-active symbols to avoid duplicates
+      // 3) Fetch currently-active + still-running journal symbols to avoid
+      //    re-suggesting a stock that is already in flight. A symbol becomes
+      //    eligible again only once its trade closes (target hit / graded).
       const { data: activeRows } = await supabaseAdmin
         .from("recommendations").select("symbol").eq("status", "active");
-      const activeSet = new Set((activeRows ?? []).map((r) => r.symbol));
+      const { data: runningRows } = await supabaseAdmin
+        .from("journal_entries").select("symbol").eq("status", "in_progress");
+      const activeSet = new Set([
+        ...(activeRows ?? []).map((r) => r.symbol),
+        ...(runningRows ?? []).map((r) => r.symbol),
+      ]);
 
       const newPicks = candidates
         .filter(({ x }) => !activeSet.has(x.u.symbol))
+
         .map(({ x, s }) => ({
           symbol: x.u.symbol, name: x.u.name, sector: x.u.sector,
           ltp: x.q.ltp,
@@ -686,25 +694,48 @@ export const markBacktestTradeWrong = createServerFn({ method: "POST" })
 
 
 // === Journal ===
+// Target = +10% within 3 months. Winners include still-running positives,
+// losers include still-running negatives (only a hit target closes a trade).
 export const getJournal = createServerFn({ method: "GET" }).handler(async () => {
   const { data } = await supabaseAdmin
     .from("journal_entries").select("*")
     .order("suggested_at", { ascending: false }).limit(500);
-  const entries = data ?? [];
+
+  // De-duplicate: keep only the latest entry per symbol
+  const seen = new Set<string>();
+  const entries = (data ?? []).filter((e) => {
+    if (seen.has(e.symbol)) return false;
+    seen.add(e.symbol);
+    return true;
+  });
+
+  const ret = (e: any) => {
+    const entry = Number(e.entry_price ?? 0);
+    const cur = Number(e.current_price ?? 0);
+    if (!entry || !cur) return 0;
+    return ((cur - entry) / entry) * 100;
+  };
+
   const total = entries.length;
-  const winners = entries.filter((e) => e.status === "winner").length;
-  const losers = entries.filter((e) => e.status === "loser").length;
+  const winners = entries.filter((e) => e.status === "winner" || (e.status === "in_progress" && ret(e) > 0)).length;
+  const losers = entries.filter((e) => e.status === "loser" || (e.status === "in_progress" && ret(e) < 0)).length;
   const inProgress = entries.filter((e) => e.status === "in_progress").length;
-  const closed = winners + losers;
-  const winRate = closed ? winners / closed : 0;
+  const graded = winners + losers;
+  const winRate = graded ? winners / graded : 0;
+  const withPrice = entries.filter((e) => Number(e.current_price ?? 0) > 0);
+  const avgReturn = withPrice.length
+    ? withPrice.reduce((a, e) => a + ret(e), 0) / withPrice.length
+    : 0;
+  const totalReturn = withPrice.reduce((a, e) => a + ret(e), 0);
+
   return {
     entries,
-    stats: { total, winners, losers, inProgress, winRate },
+    stats: { total, winners, losers, inProgress, winRate, avgReturn, totalReturn },
   };
 });
 
 // Refreshes outcomes: fetches latest price for every in-progress entry and
-// applies winner (≥30% from entry) / loser (after 365d still negative) rules.
+// applies winner (≥10% from entry) / loser (after 90d still negative) rules.
 export const updateJournalOutcomes = createServerFn({ method: "POST" }).handler(async () => {
   const { data: entries } = await supabaseAdmin
     .from("journal_entries").select("*").eq("status", "in_progress");
@@ -720,20 +751,22 @@ export const updateJournalOutcomes = createServerFn({ method: "POST" }).handler(
     if (entry <= 0 || last <= 0) continue;
     const peak = Math.max(Number(e.peak_price ?? 0), last);
     const ageMs = Date.now() - new Date(e.suggested_at).getTime();
-    const oneYear = 365 * 24 * 60 * 60 * 1000;
+    const threeMonths = 90 * 24 * 60 * 60 * 1000;
     let status = "in_progress";
     let closed_at: string | null = null;
-    if (peak >= entry * 1.30) { status = "winner"; closed_at = new Date().toISOString(); promoted++; }
-    else if (ageMs >= oneYear && last < entry) { status = "loser"; closed_at = new Date().toISOString(); busted++; }
+    if (peak >= entry * 1.10) { status = "winner"; closed_at = new Date().toISOString(); promoted++; }
+    else if (ageMs >= threeMonths && last < entry) { status = "loser"; closed_at = new Date().toISOString(); busted++; }
     else { updated++; }
     await supabaseAdmin.from("journal_entries").update({
       current_price: last, peak_price: peak, status,
+      target_price: Number((entry * 1.10).toFixed(2)),
       closed_at: closed_at ?? e.closed_at,
       last_checked_at: new Date().toISOString(),
     }).eq("id", e.id);
   }
   return { checked: entries?.length ?? 0, promoted, busted, updated };
 });
+
 
 export const getCategoryStocks = createServerFn({ method: "GET" })
   .inputValidator((d: { category: "bullish_monthly" | "weekly_consolidation" | "synced_sector" | "high_conviction" }) => d)
