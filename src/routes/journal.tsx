@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { SiteNav } from "@/components/SiteNav";
 import { Ticker } from "@/components/Ticker";
 import { getJournal, updateJournalOutcomes } from "@/lib/market.functions";
-import { BookOpen, Loader2, RefreshCw, Trophy, TrendingDown, Hourglass, Layers } from "lucide-react";
+import { BookOpen, Loader2, RefreshCw, Trophy, TrendingDown, Hourglass, Percent } from "lucide-react";
 
 export const Route = createFileRoute("/journal")({
   component: Journal,
