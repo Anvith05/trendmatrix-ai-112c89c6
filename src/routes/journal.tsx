@@ -214,9 +214,10 @@ function Journal() {
           </div>
         ) : (
           <>
-            <div className="mb-6 grid gap-4 md:grid-cols-5">
+            <div className="mb-6 grid gap-4 md:grid-cols-6">
               <Kpi label="Win rate" value={`${(((data?.stats.winRate ?? 0) * 100)).toFixed(0)}%`} icon={<Trophy className="h-4 w-4 text-success" />} />
               <Kpi label="Avg return" value={`${avgReturn >= 0 ? "+" : ""}${avgReturn.toFixed(1)}%`} icon={<Percent className="h-4 w-4 text-primary" />} />
+              <Kpi label="Avg time to target" value={avgDays == null ? "—" : humanDays(avgDays)} icon={<Hourglass className="h-4 w-4 text-primary" />} />
               <Kpi label="Winners" value={String(filters[1]!.count)} icon={<Trophy className="h-4 w-4 text-success" />} />
               <Kpi label="Losers" value={String(filters[2]!.count)} icon={<TrendingDown className="h-4 w-4 text-destructive" />} />
               <Kpi label="In progress" value={String(data?.stats.inProgress ?? 0)} icon={<Hourglass className="h-4 w-4 text-primary" />} />
