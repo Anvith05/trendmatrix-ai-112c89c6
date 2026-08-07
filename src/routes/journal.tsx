@@ -73,11 +73,12 @@ function Section({ title, icon, entries }: { title: string; icon: React.ReactNod
               <th className="px-3 py-2">P/L</th>
               <th className="px-3 py-2">Status</th>
               <th className="px-3 py-2">Closed</th>
+              <th className="px-3 py-2">Time held</th>
             </tr>
           </thead>
           <tbody>
             {entries.length === 0 && (
-              <tr><td colSpan={10} className="px-3 py-8 text-center text-muted-foreground">No entries yet.</td></tr>
+              <tr><td colSpan={11} className="px-3 py-8 text-center text-muted-foreground">No entries yet.</td></tr>
             )}
             {entries.map((e) => {
               const p = pct(e.current_price, e.entry_price);
