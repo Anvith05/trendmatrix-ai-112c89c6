@@ -123,10 +123,7 @@ function Picks() {
   );
 }
 
-      </div>
-    </div>
-  );
-}
+
 
 function PickCard({ r, onRemoved }: { r: Rec; onRemoved: () => void }) {
   const removeFn = useServerFn(removePick);
