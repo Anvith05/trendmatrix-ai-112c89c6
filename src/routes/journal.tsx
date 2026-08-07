@@ -105,6 +105,10 @@ function Section({ title, icon, entries }: { title: string; icon: React.ReactNod
                   </td>
                   <td className="px-3 py-2"><StatusBadge s={e.status} /></td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{fmt(e.closed_at)}</td>
+                  <td className="px-3 py-2 font-mono text-xs">
+                    {humanDays(daysBetween(e.suggested_at, e.closed_at))}
+                    {!e.closed_at && <span className="ml-1 text-[10px] text-muted-foreground">running</span>}
+                  </td>
                 </tr>
               );
             })}
