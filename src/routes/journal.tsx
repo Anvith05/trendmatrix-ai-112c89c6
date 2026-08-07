@@ -32,6 +32,19 @@ function pct(cur: number | null, entry: number) {
   return ((cur - entry) / entry) * 100;
 }
 
+function daysBetween(from: string, to: string | null) {
+  const end = to ? new Date(to).getTime() : Date.now();
+  return Math.max(0, Math.round((end - new Date(from).getTime()) / 86400000));
+}
+
+function humanDays(d: number) {
+  if (d < 1) return "same day";
+  if (d < 30) return `${d}d`;
+  const m = Math.floor(d / 30);
+  const rem = d % 30;
+  return rem ? `${m}mo ${rem}d` : `${m}mo`;
+}
+
 function StatusBadge({ s }: { s: string }) {
   if (s === "winner") return <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-mono uppercase text-success">winner</span>;
   if (s === "loser") return <span className="rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] font-mono uppercase text-destructive">loser</span>;
