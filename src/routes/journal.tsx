@@ -205,7 +205,7 @@ function Journal() {
             <div className="text-xs font-mono uppercase tracking-wider text-primary">Auto-logged AI Track Record</div>
             <h1 className="mt-1 font-display text-3xl font-bold">Trade Journal</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Every recommendation is auto-saved here. Target = +10% within 3 months. Running trades in profit count as winners, running trades in loss count as losers.
+              Every recommendation is auto-saved here. Target = +10% within 3 months. Trades that reach +10% show under “TP hit”; running trades in profit show under Winners, running trades in loss under Losers.
             </p>
           </div>
           <button onClick={refreshOutcomes} disabled={busy}
