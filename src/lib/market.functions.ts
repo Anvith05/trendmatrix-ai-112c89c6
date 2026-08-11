@@ -717,7 +717,10 @@ export const getJournal = createServerFn({ method: "GET" }).handler(async () => 
   };
 
   const total = entries.length;
-  const winners = entries.filter((e) => e.status === "winner" || (e.status === "in_progress" && ret(e) > 0)).length;
+  // TP hit = closed trades that reached the +10% target.
+  const tpHit = entries.filter((e) => e.status === "winner").length;
+  // Winners = still-running trades currently in profit (TP hits are counted separately).
+  const winners = entries.filter((e) => e.status === "in_progress" && ret(e) > 0).length;
   const losers = entries.filter((e) => e.status === "loser" || (e.status === "in_progress" && ret(e) < 0)).length;
   const inProgress = entries.filter((e) => e.status === "in_progress").length;
   const graded = winners + losers;
