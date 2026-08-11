@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import ReactMarkdown from "react-markdown";
 import { getJournalChat, sendJournalChat } from "@/lib/market.functions";
-import { Bot, Loader2, Send, User } from "lucide-react";
+import { Bot, Loader2, Send, User, X } from "lucide-react";
 
 type Msg = { role: string; message: string; created_at?: string };
 
@@ -20,15 +20,17 @@ export function JournalAgent() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
+    if (!open) return;
     (async () => {
       try { setMsgs(((await load()) as any) ?? []); } catch { /* ignore */ }
     })();
     inputRef.current?.focus();
-  }, []);
+  }, [open]);
 
   useEffect(() => {
     boxRef.current?.scrollTo({ top: boxRef.current.scrollHeight, behavior: "smooth" });
