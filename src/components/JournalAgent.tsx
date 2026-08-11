@@ -141,5 +141,6 @@ export function JournalAgent() {
         </button>
       </form>
     </section>
+    </div>
   );
 }
