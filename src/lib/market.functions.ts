@@ -723,8 +723,8 @@ export const getJournal = createServerFn({ method: "GET" }).handler(async () => 
   const winners = entries.filter((e) => e.status === "in_progress" && ret(e) > 0).length;
   const losers = entries.filter((e) => e.status === "loser" || (e.status === "in_progress" && ret(e) < 0)).length;
   const inProgress = entries.filter((e) => e.status === "in_progress").length;
-  const graded = winners + losers;
-  const winRate = graded ? winners / graded : 0;
+  const graded = tpHit + winners + losers;
+  const winRate = graded ? (tpHit + winners) / graded : 0;
   const withPrice = entries.filter((e) => Number(e.current_price ?? 0) > 0);
   const avgReturn = withPrice.length
     ? withPrice.reduce((a, e) => a + ret(e), 0) / withPrice.length
@@ -733,7 +733,7 @@ export const getJournal = createServerFn({ method: "GET" }).handler(async () => 
 
   return {
     entries,
-    stats: { total, winners, losers, inProgress, winRate, avgReturn, totalReturn },
+    stats: { total, tpHit, winners, losers, inProgress, winRate, avgReturn, totalReturn },
   };
 });
 
