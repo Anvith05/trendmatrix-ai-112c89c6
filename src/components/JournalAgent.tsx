@@ -54,19 +54,37 @@ export function JournalAgent() {
     }
   }
 
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        title="Journal Analyst Agent"
+        aria-label="Open Journal Analyst Agent"
+        className="fixed bottom-6 right-6 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--gradient-primary)] glow transition hover:scale-105"
+      >
+        <Bot className="h-5 w-5 !text-white" />
+      </button>
+    );
+  }
+
   return (
-    <section className="mb-8 rounded-xl glass p-4">
+    <div className="fixed inset-0 z-50 flex items-end justify-end bg-background/60 p-4 backdrop-blur-sm sm:items-center sm:justify-center">
+    <section className="w-full max-w-2xl rounded-xl glass p-4 shadow-xl">
       <div className="mb-3 flex items-center gap-2">
         <Bot className="h-4 w-4 text-primary" />
         <h2 className="font-display text-lg font-semibold">Journal Analyst Agent</h2>
         <span className="rounded-full border border-border px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
           full data access
         </span>
+        <button onClick={() => setOpen(false)} aria-label="Close" className="ml-auto rounded-md p-1 text-muted-foreground hover:text-foreground">
+          <X className="h-4 w-4" />
+        </button>
       </div>
       <p className="mb-3 text-xs text-muted-foreground">
         Reads your journal, live picks, agent rankings, sector scores and training library — ask anything about
         performance, failures or parameter tuning.
       </p>
+
 
       <div ref={boxRef} className="max-h-[26rem] space-y-3 overflow-y-auto rounded-lg border border-border/60 bg-background/40 p-3">
         {msgs.length === 0 && !busy && (
