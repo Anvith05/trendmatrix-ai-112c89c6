@@ -870,3 +870,137 @@ export const backtestWeekly = createServerFn({ method: "POST" })
       rows: rows.sort((a, b) => Number(b.weekly_score) - Number(a.weekly_score)),
     };
   });
+
+// === Journal Analyst Agent ===
+// A real analyst agent with read access to the whole platform's data:
+// journal entries + stats, live recommendations, latest rankings, sector
+// scores, training library and agent rules. It reasons over the actual rows.
+export const getJournalChat = createServerFn({ method: "GET" }).handler(async () => {
+  const { data: rows } = await supabaseAdmin
+    .from("agent_feedback").select("*")
+    .eq("agent", "journal_analyst")
+    .order("created_at", { ascending: true })
+    .limit(100);
+  return (rows ?? []).filter((r) => r.role === "user" || r.role === "assistant");
+});
+
+export const sendJournalChat = createServerFn({ method: "POST" })
+  .inputValidator((d: { message: string }) => d)
+  .handler(async ({ data }) => {
+    const LOVABLE_API_KEY = process.env.LOVABLE_API_KEY;
+    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY missing");
+
+    await supabaseAdmin.from("agent_feedback").insert({
+      agent: "journal_analyst", role: "user", message: data.message,
+    });
+
+    // --- gather live context from every part of the platform ---
+    const [journal, recs, lastRunRes, training, rules] = await Promise.all([
+      supabaseAdmin.from("journal_entries").select("*").order("suggested_at", { ascending: false }).limit(300),
+      supabaseAdmin.from("recommendations").select("*").order("recommended_at", { ascending: false }).limit(60),
+      supabaseAdmin.from("agent_runs").select("*").eq("status", "success").order("finished_at", { ascending: false }).limit(1).maybeSingle(),
+      supabaseAdmin.from("training_examples").select("symbol, label, tags, quality, notes").order("created_at", { ascending: false }).limit(60),
+      supabaseAdmin.from("agent_feedback").select("agent, message").eq("role", "rule").order("created_at", { ascending: false }).limit(40),
+    ]);
+
+    const lastRun = (lastRunRes as any)?.data ?? null;
+    const { data: rankings } = lastRun
+      ? await supabaseAdmin.from("rankings").select("*").eq("run_id", lastRun.id).order("swing_score", { ascending: false }).limit(40)
+      : { data: [] as any[] };
+
+    const jEntries = journal.data ?? [];
+    const ret = (e: any) => {
+      const en = Number(e.entry_price ?? 0), cu = Number(e.current_price ?? 0);
+      return en && cu ? ((cu - en) / en) * 100 : 0;
+    };
+    const tpHit = jEntries.filter((e) => e.status === "winner");
+    const running = jEntries.filter((e) => e.status === "in_progress");
+    const losers = jEntries.filter((e) => e.status === "loser");
+    const days = (a: string, b: string | null) =>
+      Math.max(0, Math.round(((b ? new Date(b).getTime() : Date.now()) - new Date(a).getTime()) / 86400000));
+
+    const context = {
+      journal_stats: {
+        total: jEntries.length,
+        tp_hit: tpHit.length,
+        running_positive: running.filter((e) => ret(e) > 0).length,
+        running_negative: running.filter((e) => ret(e) < 0).length,
+        closed_losers: losers.length,
+        avg_days_to_target: tpHit.length
+          ? Math.round(tpHit.reduce((s, e) => s + days(e.suggested_at, e.closed_at), 0) / tpHit.length)
+          : null,
+        avg_return_pct: jEntries.length
+          ? Number((jEntries.reduce((s, e) => s + ret(e), 0) / jEntries.length).toFixed(2))
+          : 0,
+      },
+      journal_entries: jEntries.slice(0, 120).map((e) => ({
+        symbol: e.symbol, sector: e.sector, kind: e.kind, status: e.status,
+        entry: Number(e.entry_price), current: e.current_price, peak: e.peak_price,
+        return_pct: Number(ret(e).toFixed(2)),
+        suggested_at: e.suggested_at, closed_at: e.closed_at,
+        days_held: days(e.suggested_at, e.closed_at),
+        swing_score: e.swing_score, tags: e.tags,
+      })),
+      active_recommendations: (recs.data ?? []).filter((r) => r.status === "active").map((r) => ({
+        symbol: r.symbol, sector: r.sector, swing_score: r.swing_score,
+        entry_price: r.entry_price, ltp: r.ltp, tags: r.tags, recommended_at: r.recommended_at,
+      })),
+      archived_recommendations: (recs.data ?? []).filter((r) => r.status !== "active").slice(0, 20).map((r) => ({
+        symbol: r.symbol, outcome: r.outcome, removed_reason: r.removed_reason,
+      })),
+      latest_run: lastRun ? { finished_at: lastRun.finished_at, scanned: lastRun.scanned ?? null } : null,
+      top_rankings: (rankings ?? []).map((r: any) => ({
+        symbol: r.symbol, sector: r.sector, swing: r.swing_score, monthly: r.monthly_score,
+        weekly: r.weekly_score, sector_score: r.sector_score, rs: r.rs_score,
+        volume: r.volume_score, history: r.history_score, status: r.status,
+      })),
+      training_library: training.data ?? [],
+      active_agent_rules: rules.data ?? [],
+    };
+
+    const { data: history } = await supabaseAdmin
+      .from("agent_feedback").select("role, message")
+      .eq("agent", "journal_analyst")
+      .order("created_at", { ascending: true })
+      .limit(30);
+
+    const system = `You are the Journal Analyst — the senior analyst agent of TrendMatrix AI, an Indian-equities (NSE/BSE) swing-trading platform.
+
+You have READ ACCESS to the platform's live data, supplied below as JSON. Always answer from that data — quote real symbols, real returns, real dates, real scores. Never invent numbers, and say plainly when the data does not contain the answer.
+
+Rules of the strategy you are evaluating:
+- Setup = strong monthly trend + weekly consolidation + sector sync.
+- Target = +10% from entry within 3 months; hitting it closes the trade as "TP hit".
+- Running trades in profit are "winners in progress"; running trades in loss are "losers in progress".
+- A trade that is still negative after 90 days is closed as a loser.
+
+Behave like a real analyst: compute stats on request (win rate by sector, by score band, by kind, hold times, drawdowns), spot patterns in what worked and what failed, and give concrete, quantified recommendations for parameter changes. Use markdown, tables where useful, and keep it tight.
+
+PLATFORM DATA (JSON):
+${JSON.stringify(context)}`;
+
+    const messages = [
+      { role: "system", content: system },
+      ...(history ?? [])
+        .filter((h) => h.role === "user" || h.role === "assistant")
+        .map((h) => ({ role: h.role, content: h.message })),
+    ];
+
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "google/gemini-2.5-flash", messages }),
+    });
+    if (!res.ok) {
+      const t = await res.text();
+      if (res.status === 429) throw new Error("Rate limit reached, please retry in a moment.");
+      if (res.status === 402) throw new Error("AI credits exhausted. Add credits to continue.");
+      throw new Error(`AI gateway ${res.status}: ${t.slice(0, 200)}`);
+    }
+    const json: any = await res.json();
+    const reply: string = json.choices?.[0]?.message?.content ?? "(no reply)";
+    await supabaseAdmin.from("agent_feedback").insert({
+      agent: "journal_analyst", role: "assistant", message: reply,
+    });
+    return { reply };
+  });
