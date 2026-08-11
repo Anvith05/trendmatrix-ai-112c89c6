@@ -4,7 +4,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { SiteNav } from "@/components/SiteNav";
 import { Ticker } from "@/components/Ticker";
 import { getJournal, updateJournalOutcomes } from "@/lib/market.functions";
-import { BookOpen, Loader2, RefreshCw, Trophy, TrendingDown, Hourglass, Percent } from "lucide-react";
+import { JournalAgent } from "@/components/JournalAgent";
+import { BookOpen, Loader2, RefreshCw, Trophy, TrendingDown, Hourglass, Percent, Target } from "lucide-react";
 
 export const Route = createFileRoute("/journal")({
   component: Journal,
@@ -131,14 +132,18 @@ function Kpi({ label, value, icon, tone }: { label: string; value: string; icon:
   );
 }
 
-type Filter = "all" | "winners" | "losers" | "in_progress";
+type Filter = "all" | "tp_hit" | "winners" | "losers" | "in_progress";
 
 function retPct(e: Entry) {
   const p = pct(e.current_price, e.entry_price);
   return p ?? 0;
 }
+function isTpHit(e: Entry) {
+  return e.status === "winner";
+}
+// Winners = still-running trades currently in profit (TP hits are their own bucket).
 function isWinner(e: Entry) {
-  return e.status === "winner" || (e.status === "in_progress" && retPct(e) > 0);
+  return e.status === "in_progress" && retPct(e) > 0;
 }
 function isLoser(e: Entry) {
   return e.status === "loser" || (e.status === "in_progress" && retPct(e) < 0);
@@ -172,6 +177,7 @@ function Journal() {
   const all = data?.entries ?? [];
   const shown = all.filter((e) =>
     filter === "all" ? true
+    : filter === "tp_hit" ? isTpHit(e)
     : filter === "winners" ? isWinner(e)
     : filter === "losers" ? isLoser(e)
     : e.status === "in_progress",
@@ -184,6 +190,7 @@ function Journal() {
     : null;
   const filters: { key: Filter; label: string; count: number }[] = [
     { key: "all", label: "All", count: all.length },
+    { key: "tp_hit", label: "TP hit", count: all.filter(isTpHit).length },
     { key: "winners", label: "Winners", count: all.filter(isWinner).length },
     { key: "losers", label: "Losers", count: all.filter(isLoser).length },
     { key: "in_progress", label: "In progress", count: all.filter((e) => e.status === "in_progress").length },
@@ -198,7 +205,7 @@ function Journal() {
             <div className="text-xs font-mono uppercase tracking-wider text-primary">Auto-logged AI Track Record</div>
             <h1 className="mt-1 font-display text-3xl font-bold">Trade Journal</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Every recommendation is auto-saved here. Target = +10% within 3 months. Running trades in profit count as winners, running trades in loss count as losers.
+              Every recommendation is auto-saved here. Target = +10% within 3 months. Trades that reach +10% show under “TP hit”; running trades in profit show under Winners, running trades in loss under Losers.
             </p>
           </div>
           <button onClick={refreshOutcomes} disabled={busy}
@@ -214,12 +221,13 @@ function Journal() {
           </div>
         ) : (
           <>
-            <div className="mb-6 grid gap-4 md:grid-cols-6">
+            <div className="mb-6 grid gap-4 md:grid-cols-7">
               <Kpi label="Win rate" value={`${(((data?.stats.winRate ?? 0) * 100)).toFixed(0)}%`} icon={<Trophy className="h-4 w-4 text-success" />} />
               <Kpi label="Avg return" value={`${avgReturn >= 0 ? "+" : ""}${avgReturn.toFixed(1)}%`} icon={<Percent className="h-4 w-4 text-primary" />} />
               <Kpi label="Avg time to target" value={avgDays == null ? "—" : humanDays(avgDays)} icon={<Hourglass className="h-4 w-4 text-primary" />} />
-              <Kpi label="Winners" value={String(filters[1]!.count)} icon={<Trophy className="h-4 w-4 text-success" />} />
-              <Kpi label="Losers" value={String(filters[2]!.count)} icon={<TrendingDown className="h-4 w-4 text-destructive" />} />
+              <Kpi label="TP hit" value={String(all.filter(isTpHit).length)} icon={<Target className="h-4 w-4 text-success" />} />
+              <Kpi label="Winners (running)" value={String(all.filter(isWinner).length)} icon={<Trophy className="h-4 w-4 text-success" />} />
+              <Kpi label="Losers" value={String(all.filter(isLoser).length)} icon={<TrendingDown className="h-4 w-4 text-destructive" />} />
               <Kpi label="In progress" value={String(data?.stats.inProgress ?? 0)} icon={<Hourglass className="h-4 w-4 text-primary" />} />
             </div>
 
@@ -235,6 +243,8 @@ function Journal() {
                 </button>
               ))}
             </div>
+
+            <JournalAgent />
 
             <Section title="Picks log (stocks & ETFs)" icon={<BookOpen className="h-4 w-4 text-primary" />} entries={shown} />
           </>
