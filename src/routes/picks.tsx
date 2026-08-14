@@ -123,8 +123,10 @@ function Picks() {
 
 
 
-function PickCard({ r, onRemoved }: { r: Rec; onRemoved: () => void }) {
+function PickCard({ r, onRemoved, onRead }: { r: Rec; onRemoved: () => void; onRead: () => void }) {
   const removeFn = useServerFn(removePick);
+  const readFn = useServerFn(markPickRead);
+  const [reading, setReading] = useState(false);
   const [showRemove, setShowRemove] = useState(false);
   const [reason, setReason] = useState("");
   const [file, setFile] = useState<File | null>(null);
