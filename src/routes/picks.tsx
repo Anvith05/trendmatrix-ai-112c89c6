@@ -111,7 +111,7 @@ function Picks() {
             </div>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {data?.active.map((r) => <PickCard key={r.id} r={r} onRemoved={load} />)}
+              {data?.active.map((r) => <PickCard key={r.id} r={r} onRemoved={load} onRead={refresh} />)}
             </div>
           )}
         </section>
