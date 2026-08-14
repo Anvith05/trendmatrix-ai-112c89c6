@@ -3,9 +3,9 @@ import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { SiteNav } from "@/components/SiteNav";
 import { Ticker } from "@/components/Ticker";
-import { getLatestRankings, getQuote, getRecommendations, removePick, runAgents } from "@/lib/market.functions";
+import { getLatestRankings, getQuote, getRecommendations, markPickRead, removePick, runAgents } from "@/lib/market.functions";
 import { supabase } from "@/integrations/supabase/client";
-import { Sparkles, TrendingUp, Loader2, RefreshCw, ArrowRight, Trash2, Upload, X } from "lucide-react";
+import { Sparkles, TrendingUp, Loader2, RefreshCw, ArrowRight, Trash2, Upload, X, BookOpenCheck } from "lucide-react";
 
 
 export const Route = createFileRoute("/picks")({
@@ -111,7 +111,7 @@ function Picks() {
             </div>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {data?.active.map((r) => <PickCard key={r.id} r={r} onRemoved={load} />)}
+              {data?.active.map((r) => <PickCard key={r.id} r={r} onRemoved={load} onRead={refresh} />)}
             </div>
           )}
         </section>
@@ -123,8 +123,10 @@ function Picks() {
 
 
 
-function PickCard({ r, onRemoved }: { r: Rec; onRemoved: () => void }) {
+function PickCard({ r, onRemoved, onRead }: { r: Rec; onRemoved: () => void; onRead: () => void }) {
   const removeFn = useServerFn(removePick);
+  const readFn = useServerFn(markPickRead);
+  const [reading, setReading] = useState(false);
   const [showRemove, setShowRemove] = useState(false);
   const [reason, setReason] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -206,12 +208,26 @@ function PickCard({ r, onRemoved }: { r: Rec; onRemoved: () => void }) {
         </div>
       )}
 
-      <div className="mt-3 flex items-center justify-between gap-2">
-        <button onClick={() => setShowRemove((v) => !v)}
-          className="inline-flex items-center gap-1 rounded-md border border-destructive/40 px-2 py-1 text-[11px] font-semibold text-destructive hover:bg-destructive/10">
-          <Trash2 className="h-3 w-3" /> Remove
-        </button>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowRemove((v) => !v)}
+            className="inline-flex items-center gap-1 rounded-md border border-destructive/40 px-2 py-1 text-[11px] font-semibold text-destructive hover:bg-destructive/10">
+            <Trash2 className="h-3 w-3" /> Remove
+          </button>
+          <button
+            onClick={async () => {
+              setReading(true);
+              try { await readFn({ data: { id: r.id } }); await onRead(); }
+              finally { setReading(false); }
+            }}
+            disabled={reading}
+            title="Mark as read — track it from the Journal and scan for new picks"
+            className="inline-flex items-center gap-1 rounded-md border border-primary/40 px-2 py-1 text-[11px] font-semibold text-primary hover:bg-primary/10 disabled:opacity-50">
+            {reading ? <Loader2 className="h-3 w-3 animate-spin" /> : <BookOpenCheck className="h-3 w-3" />} Read
+          </button>
+        </div>
         <Link to="/research" className="flex items-center gap-1 text-xs text-primary hover:underline">
+
           Open in Research <ArrowRight className="h-3 w-3" />
         </Link>
       </div>
