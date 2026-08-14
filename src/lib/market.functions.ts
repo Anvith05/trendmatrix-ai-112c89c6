@@ -427,6 +427,19 @@ export const removePick = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+// Mark a pick as "read": remove it from Top Picks without any negative
+// feedback. The journal entry keeps tracking it.
+export const markPickRead = createServerFn({ method: "POST" })
+  .inputValidator((d: { id: string }) => d)
+  .handler(async ({ data }) => {
+    await supabaseAdmin.from("recommendations").update({
+      status: "historical",
+      archived_at: new Date().toISOString(),
+      outcome: "read",
+    }).eq("id", data.id);
+    return { ok: true };
+  });
+
 export const getAgentChat = createServerFn({ method: "GET" })
   .inputValidator((d: { agent: string }) => d)
   .handler(async ({ data }) => {
