@@ -208,12 +208,26 @@ function PickCard({ r, onRemoved, onRead }: { r: Rec; onRemoved: () => void; onR
         </div>
       )}
 
-      <div className="mt-3 flex items-center justify-between gap-2">
-        <button onClick={() => setShowRemove((v) => !v)}
-          className="inline-flex items-center gap-1 rounded-md border border-destructive/40 px-2 py-1 text-[11px] font-semibold text-destructive hover:bg-destructive/10">
-          <Trash2 className="h-3 w-3" /> Remove
-        </button>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowRemove((v) => !v)}
+            className="inline-flex items-center gap-1 rounded-md border border-destructive/40 px-2 py-1 text-[11px] font-semibold text-destructive hover:bg-destructive/10">
+            <Trash2 className="h-3 w-3" /> Remove
+          </button>
+          <button
+            onClick={async () => {
+              setReading(true);
+              try { await readFn({ data: { id: r.id } }); await onRead(); }
+              finally { setReading(false); }
+            }}
+            disabled={reading}
+            title="Mark as read — track it from the Journal and scan for new picks"
+            className="inline-flex items-center gap-1 rounded-md border border-primary/40 px-2 py-1 text-[11px] font-semibold text-primary hover:bg-primary/10 disabled:opacity-50">
+            {reading ? <Loader2 className="h-3 w-3 animate-spin" /> : <BookOpenCheck className="h-3 w-3" />} Read
+          </button>
+        </div>
         <Link to="/research" className="flex items-center gap-1 text-xs text-primary hover:underline">
+
           Open in Research <ArrowRight className="h-3 w-3" />
         </Link>
       </div>
