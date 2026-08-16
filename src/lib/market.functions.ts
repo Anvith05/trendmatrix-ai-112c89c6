@@ -1017,3 +1017,93 @@ ${JSON.stringify(context)}`;
     });
     return { reply };
   });
+
+// === Live sector intelligence ===
+// Aggregates the latest agent run's rankings into a per-sector heatmap so the
+// /sectors pages reflect real-time agent output instead of static seed data.
+export const getSectorHeatmap = createServerFn({ method: "GET" }).handler(async () => {
+  const { data: lastRun } = await supabaseAdmin
+    .from("agent_runs").select("*").eq("status", "success")
+    .order("finished_at", { ascending: false }).limit(1).maybeSingle();
+  if (!lastRun) return { run: null, sectors: [] as any[] };
+
+  const { data: rk } = await supabaseAdmin
+    .from("rankings").select("*").eq("run_id", lastRun.id);
+  const rows = rk ?? [];
+
+  const bySector = new Map<string, any[]>();
+  for (const r of rows) {
+    const s = r.sector ?? "Unknown";
+    if (!bySector.has(s)) bySector.set(s, []);
+    bySector.get(s)!.push(r);
+  }
+
+  const avg = (a: number[]) => (a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : 0);
+
+  const sectors = Array.from(bySector.entries()).map(([name, list]) => {
+    const monthly = avg(list.map((r) => r.monthly_score ?? 0));
+    const weekly = avg(list.map((r) => r.weekly_score ?? 0));
+    const sync = avg(list.map((r) => r.sector_score ?? 0));
+    const rs = avg(list.map((r) => (r.rs_score ?? 50) - 50));
+    const basing = list.filter((r) => (r.weekly_score ?? 0) >= 65 && (r.monthly_score ?? 0) >= 60).length;
+    return {
+      id: name.toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
+      name,
+      monthlyTrend: monthly,
+      weeklyConsolidation: weekly,
+      syncScore: sync || Math.round((monthly + weekly) / 2),
+      basingCount: basing,
+      totalStocks: list.length,
+      rs,
+    };
+  }).sort((a, b) => b.syncScore - a.syncScore);
+
+  return { run: lastRun, sectors };
+});
+
+export const getSectorDetail = createServerFn({ method: "GET" })
+  .inputValidator((d: { sectorId: string }) => d)
+  .handler(async ({ data }) => {
+    const { data: lastRun } = await supabaseAdmin
+      .from("agent_runs").select("*").eq("status", "success")
+      .order("finished_at", { ascending: false }).limit(1).maybeSingle();
+    if (!lastRun) return { run: null, sector: null, stocks: [] as any[] };
+
+    const { data: rk } = await supabaseAdmin
+      .from("rankings").select("*").eq("run_id", lastRun.id);
+    const slug = (n: string) => n.toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    const list = (rk ?? []).filter((r) => slug(r.sector ?? "") === data.sectorId);
+    if (!list.length) return { run: lastRun, sector: null, stocks: [] as any[] };
+
+    const { data: uni } = await supabaseAdmin.from("stock_universe").select("symbol, kind");
+    const kindMap = new Map((uni ?? []).map((u) => [u.symbol, u.kind ?? "stock"]));
+    const avg = (a: number[]) => (a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : 0);
+
+    const stocks = list
+      .map((r) => ({
+        symbol: r.symbol,
+        name: r.name ?? r.symbol,
+        kind: kindMap.get(r.symbol) ?? "stock",
+        ltp: Number(r.ltp ?? 0),
+        changePct: Number(r.change_pct ?? 0),
+        monthlyScore: r.monthly_score ?? 0,
+        weeklyScore: r.weekly_score ?? 0,
+        rs: (r.rs_score ?? 50) - 50,
+        swingScore: r.swing_score ?? 0,
+        status: r.status ?? "watch",
+      }))
+      .sort((a, b) => b.swingScore - a.swingScore);
+
+    const sector = {
+      id: data.sectorId,
+      name: list[0].sector ?? data.sectorId,
+      monthlyTrend: avg(list.map((r) => r.monthly_score ?? 0)),
+      weeklyConsolidation: avg(list.map((r) => r.weekly_score ?? 0)),
+      syncScore: avg(list.map((r) => r.sector_score ?? 0)),
+      basingCount: stocks.filter((s) => s.weeklyScore >= 65 && s.monthlyScore >= 60).length,
+      totalStocks: stocks.length,
+      rs: avg(stocks.map((s) => s.rs)),
+    };
+
+    return { run: lastRun, sector, stocks };
+  });
