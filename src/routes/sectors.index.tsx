@@ -1,23 +1,66 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { SiteNav } from "@/components/SiteNav";
-import { sectors } from "@/lib/mockData";
+import { sectors as MOCK_SECTORS } from "@/lib/mockData";
+import { getSectorHeatmap } from "@/lib/market.functions";
+import { RefreshCw } from "lucide-react";
 
-export const Route = createFileRoute("/sectors/")({ component: SectorsPage,
-  head: () => ({ meta: [{ title: "Sector Heatmap · TrendMatrix AI" }] }),
+export const Route = createFileRoute("/sectors/")({
+  component: SectorsPage,
+  head: () => ({
+    meta: [
+      { title: "Live Sector Heatmap · TrendMatrix AI" },
+      { name: "description", content: "Real-time NSE/BSE sector sync scores from the TrendMatrix AI agent pipeline — see which sector is priming for the next rally." },
+      { property: "og:title", content: "Live Sector Heatmap · TrendMatrix AI" },
+      { property: "og:description", content: "Real-time sector sync scores and basing lists across NSE/BSE sectors." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
 });
 
 function SectorsPage() {
-  const sorted = [...sectors].sort((a, b) => b.syncScore - a.syncScore);
+  const fetchHeatmap = useServerFn(getSectorHeatmap);
+  const { data, isFetching, dataUpdatedAt, refetch } = useQuery({
+    queryKey: ["sector-heatmap"],
+    queryFn: () => fetchHeatmap(),
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+  });
+
+  const live = data?.sectors ?? [];
+  const sorted = live.length ? live : [...MOCK_SECTORS].sort((a, b) => b.syncScore - a.syncScore);
+  const isLive = live.length > 0;
+
   return (
     <div className="min-h-screen">
       <SiteNav />
       <div className="mx-auto max-w-7xl px-4 py-8">
-        <div className="mb-6">
-          <div className="text-xs font-mono uppercase tracking-wider text-primary">Sector Synchronization Heatmap</div>
-          <h1 className="mt-1 font-display text-3xl font-bold">Where the next rally is brewing</h1>
-          <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-            Color intensity = sector sync score. Click any sector to see the live "basing list" of consolidating stocks.
-          </p>
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <div className="text-xs font-mono uppercase tracking-wider text-primary">Sector Synchronization Heatmap</div>
+            <h1 className="mt-1 font-display text-3xl font-bold">Where the next rally is brewing</h1>
+            <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
+              Color intensity = live sector sync score computed by the Sector AI agent. Click any sector to see its real-time basing list.
+            </p>
+          </div>
+          <div className="text-right text-[11px] font-mono text-muted-foreground">
+            <div className="flex items-center justify-end gap-2">
+              <span className={`h-2 w-2 rounded-full ${isLive ? "bg-success" : "bg-muted-foreground"}`} />
+              {isLive ? "LIVE agent run" : "Seed data (awaiting first run)"}
+            </div>
+            <div className="mt-1">
+              {data?.run?.finished_at ? `Run ${new Date(data.run.finished_at).toLocaleTimeString()}` : ""}
+              {dataUpdatedAt ? ` · synced ${new Date(dataUpdatedAt).toLocaleTimeString()}` : ""}
+            </div>
+            <button
+              onClick={() => refetch()}
+              className="mt-2 inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 uppercase tracking-wider transition hover:text-foreground"
+            >
+              <RefreshCw className={`h-3 w-3 ${isFetching ? "animate-spin" : ""}`} /> Refresh
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
