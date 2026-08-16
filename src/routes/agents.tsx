@@ -2,11 +2,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { SiteNav } from "@/components/SiteNav";
+import { PinGate } from "@/components/PinGate";
 import { agents } from "@/lib/mockData";
 import { getAgentChat, sendAgentChat, backtestWeekly } from "@/lib/market.functions";
 import { ChevronRight, Cpu, CheckCircle2, XCircle, MessageSquare, Send, Loader2, Sparkles } from "lucide-react";
 
-export const Route = createFileRoute("/agents")({ component: Agents,
+export const Route = createFileRoute("/agents")({ component: AgentsPage,
   head: () => ({ meta: [{ title: "AI Agent Flow · TrendMatrix AI" }] }),
 });
 
@@ -37,10 +38,20 @@ const reasonings: Record<string, { accepted: string[]; rejected: string[]; reaso
   master: { accepted: ["12 high-conviction setups"], rejected: ["Borderline candidates parked in watchlist"], reasoning: "Weighted ensemble: monthly·0.30 + weekly·0.25 + sectorSync·0.20 + similarity·0.15 + RS/Vol·0.10." },
 };
 
-function Agents() {
+function AgentsPage() {
   return (
     <div className="min-h-screen">
       <SiteNav />
+      <PinGate area="AI Agents">
+        <Agents />
+      </PinGate>
+    </div>
+  );
+}
+
+function Agents() {
+  return (
+    <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-8">
         <div className="mb-6">
           <div className="text-xs font-mono uppercase tracking-wider text-primary">Multi-Agent Workflow</div>

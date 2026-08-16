@@ -2,11 +2,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { SiteNav } from "@/components/SiteNav";
+import { PinGate } from "@/components/PinGate";
 import { supabase } from "@/integrations/supabase/client";
 import { extractTrainingFeatures } from "@/lib/training.functions";
 import { Brain, Upload, Trash2, ImageIcon, Tag, Sparkles, TrendingUp, Activity, Gauge } from "lucide-react";
 
-export const Route = createFileRoute("/training")({ component: TrainingLab,
+export const Route = createFileRoute("/training")({ component: TrainingLabPage,
   head: () => ({ meta: [{ title: "AI Training Lab · TrendMatrix AI" }] }),
 });
 
@@ -38,6 +39,17 @@ type Row = {
   tags: string[] | null;
   features: Features | null;
 };
+
+function TrainingLabPage() {
+  return (
+    <div className="min-h-screen">
+      <SiteNav />
+      <PinGate area="Training Lab">
+        <TrainingLab />
+      </PinGate>
+    </div>
+  );
+}
 
 function TrainingLab() {
   const [file, setFile] = useState<File | null>(null);
@@ -117,7 +129,6 @@ function TrainingLab() {
 
   return (
     <div className="min-h-screen">
-      <SiteNav />
       <div className="mx-auto max-w-7xl px-4 py-8">
         <div className="mb-6 flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--gradient-primary)] glow">
