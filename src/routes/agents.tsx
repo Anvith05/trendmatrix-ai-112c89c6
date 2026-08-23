@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { SiteNav } from "@/components/SiteNav";
-import { PinPrompt, usePinUnlocked } from "@/components/PinGate";
+import { PinPrompt, useChatPinUnlocked } from "@/components/PinGate";
 import { agents } from "@/lib/mockData";
 import { getAgentChat, sendAgentChat, backtestWeekly } from "@/lib/market.functions";
 import { ChevronRight, Cpu, CheckCircle2, XCircle, MessageSquare, Send, Loader2, Sparkles } from "lucide-react";
@@ -123,7 +123,7 @@ function Agents() {
 function AgentChat({ agent }: { agent: string }) {
   const fetchChat = useServerFn(getAgentChat);
   const send = useServerFn(sendAgentChat);
-  const { ok, ready, setOk } = usePinUnlocked();
+  const { ok, ready, setOk } = useChatPinUnlocked();
   const [open, setOpen] = useState(false);
 
   const [msgs, setMsgs] = useState<{ role: string; message: string; created_at: string }[]>([]);
