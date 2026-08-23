@@ -4,6 +4,27 @@ import { Lock, ShieldCheck } from "lucide-react";
 const KEY = "tm_access_pin_ok";
 const PIN = "9912510781";
 
+// Chat unlock is per page-load only (never persisted) so a random visitor
+// always has to enter the PIN before coaching an agent.
+let chatUnlocked = false;
+
+export function useChatPinUnlocked() {
+  const [ok, setOk] = useState(false);
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    setOk(chatUnlocked);
+    setReady(true);
+  }, []);
+  return {
+    ok,
+    ready,
+    setOk: (v: boolean) => {
+      chatUnlocked = v;
+      setOk(v);
+    },
+  };
+}
+
 export function usePinUnlocked() {
   const [ok, setOk] = useState(false);
   const [ready, setReady] = useState(false);
