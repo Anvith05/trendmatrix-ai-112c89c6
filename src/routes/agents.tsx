@@ -42,12 +42,11 @@ function AgentsPage() {
   return (
     <div className="min-h-screen">
       <SiteNav />
-      <PinGate area="AI Agents">
-        <Agents />
-      </PinGate>
+      <Agents />
     </div>
   );
 }
+
 
 function Agents() {
   return (
