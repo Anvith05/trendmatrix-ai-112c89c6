@@ -155,8 +155,14 @@ function AgentChat({ agent }: { agent: string }) {
         <span className="inline-flex items-center gap-2"><MessageSquare className="h-3.5 w-3.5" /> Coach this agent (chat)</span>
         <span className="text-[10px] font-mono text-muted-foreground">{open ? "hide" : "open"}</span>
       </button>
-      {open && (
+      {open && ready && !ok && (
         <div className="mt-3">
+          <PinPrompt label="Enter the access PIN to chat with and coach this agent." onUnlock={() => setOk(true)} />
+        </div>
+      )}
+      {open && ok && (
+        <div className="mt-3">
+
           <div className="max-h-64 space-y-2 overflow-y-auto rounded-md bg-card/40 p-2">
             {msgs.length === 0 && (
               <div className="p-3 text-center text-[11px] text-muted-foreground">
