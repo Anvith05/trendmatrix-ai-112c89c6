@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { SiteNav } from "@/components/SiteNav";
-import { PinGate } from "@/components/PinGate";
+import { PinPrompt, usePinUnlocked } from "@/components/PinGate";
 import { agents } from "@/lib/mockData";
 import { getAgentChat, sendAgentChat, backtestWeekly } from "@/lib/market.functions";
 import { ChevronRight, Cpu, CheckCircle2, XCircle, MessageSquare, Send, Loader2, Sparkles } from "lucide-react";
