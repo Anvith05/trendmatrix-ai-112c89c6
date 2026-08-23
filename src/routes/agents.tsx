@@ -135,7 +135,7 @@ function AgentChat({ agent }: { agent: string }) {
     const rows = await fetchChat({ data: { agent } });
     setMsgs((rows as any[]).filter((r) => r.role === "user" || r.role === "assistant" || r.role === "rule"));
   }
-  useEffect(() => { if (open) load(); }, [open]);
+  useEffect(() => { if (open && ok) load(); }, [open, ok]);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
 
   async function submit() {
