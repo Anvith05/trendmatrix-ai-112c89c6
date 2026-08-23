@@ -123,7 +123,9 @@ function Agents() {
 function AgentChat({ agent }: { agent: string }) {
   const fetchChat = useServerFn(getAgentChat);
   const send = useServerFn(sendAgentChat);
+  const { ok, ready, setOk } = usePinUnlocked();
   const [open, setOpen] = useState(false);
+
   const [msgs, setMsgs] = useState<{ role: string; message: string; created_at: string }[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
