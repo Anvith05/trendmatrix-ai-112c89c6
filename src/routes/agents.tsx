@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { SiteNav } from "@/components/SiteNav";
-import { PinGate } from "@/components/PinGate";
+import { PinPrompt, usePinUnlocked } from "@/components/PinGate";
 import { agents } from "@/lib/mockData";
 import { getAgentChat, sendAgentChat, backtestWeekly } from "@/lib/market.functions";
 import { ChevronRight, Cpu, CheckCircle2, XCircle, MessageSquare, Send, Loader2, Sparkles } from "lucide-react";
@@ -42,12 +42,11 @@ function AgentsPage() {
   return (
     <div className="min-h-screen">
       <SiteNav />
-      <PinGate area="AI Agents">
-        <Agents />
-      </PinGate>
+      <Agents />
     </div>
   );
 }
+
 
 function Agents() {
   return (
@@ -124,7 +123,9 @@ function Agents() {
 function AgentChat({ agent }: { agent: string }) {
   const fetchChat = useServerFn(getAgentChat);
   const send = useServerFn(sendAgentChat);
+  const { ok, ready, setOk } = usePinUnlocked();
   const [open, setOpen] = useState(false);
+
   const [msgs, setMsgs] = useState<{ role: string; message: string; created_at: string }[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -134,7 +135,7 @@ function AgentChat({ agent }: { agent: string }) {
     const rows = await fetchChat({ data: { agent } });
     setMsgs((rows as any[]).filter((r) => r.role === "user" || r.role === "assistant" || r.role === "rule"));
   }
-  useEffect(() => { if (open) load(); }, [open]);
+  useEffect(() => { if (open && ok) load(); }, [open, ok]);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
 
   async function submit() {
@@ -154,8 +155,14 @@ function AgentChat({ agent }: { agent: string }) {
         <span className="inline-flex items-center gap-2"><MessageSquare className="h-3.5 w-3.5" /> Coach this agent (chat)</span>
         <span className="text-[10px] font-mono text-muted-foreground">{open ? "hide" : "open"}</span>
       </button>
-      {open && (
+      {open && ready && !ok && (
         <div className="mt-3">
+          <PinPrompt label="Enter the access PIN to chat with and coach this agent." onUnlock={() => setOk(true)} />
+        </div>
+      )}
+      {open && ok && (
+        <div className="mt-3">
+
           <div className="max-h-64 space-y-2 overflow-y-auto rounded-md bg-card/40 p-2">
             {msgs.length === 0 && (
               <div className="p-3 text-center text-[11px] text-muted-foreground">

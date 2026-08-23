@@ -14,7 +14,45 @@ export function usePinUnlocked() {
   return { ok, ready, setOk };
 }
 
+export function PinPrompt({ label, onUnlock }: { label?: string; onUnlock: () => void }) {
+  const [value, setValue] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <form
+      className="space-y-2 rounded-md border border-border bg-card/40 p-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (value.trim() === PIN) {
+          localStorage.setItem(KEY, "1");
+          setError(null);
+          onUnlock();
+        } else setError("Incorrect PIN");
+      }}
+    >
+      <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+        <Lock className="h-3 w-3 text-primary" /> {label ?? "Enter the access PIN to chat with this agent."}
+      </div>
+      <div className="flex gap-2">
+        <input
+          type="password"
+          inputMode="numeric"
+          autoFocus
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder="Access PIN"
+          className="flex-1 rounded-md border border-border bg-card px-3 py-1.5 text-center font-mono text-xs tracking-[0.3em] outline-none focus:border-primary"
+        />
+        <button type="submit" className="rounded-md bg-[var(--gradient-primary)] px-3 py-1.5 text-xs font-semibold !text-white">
+          Unlock
+        </button>
+      </div>
+      {error && <div className="text-[11px] text-destructive">{error}</div>}
+    </form>
+  );
+}
+
 export function PinGate({ area, children }: { area: string; children: ReactNode }) {
+
   const { ok, ready, setOk } = usePinUnlocked();
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
