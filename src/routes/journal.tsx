@@ -82,7 +82,11 @@ function Section({ title, icon, entries }: { title: string; icon: React.ReactNod
               <tr><td colSpan={11} className="px-3 py-8 text-center text-muted-foreground">No entries yet.</td></tr>
             )}
             {entries.map((e) => {
-              const p = pct(e.current_price, e.entry_price);
+              // For closed TP hits, show the realized return at target (peak), not the pulled-back price.
+              const closedWin = e.status === "winner";
+              const p = closedWin
+                ? Math.max(pct(e.peak_price, e.entry_price) ?? 10, 10)
+                : pct(e.current_price, e.entry_price);
               const target = e.entry_price ? e.entry_price * 1.1 : null;
               return (
                 <tr key={e.id} className="border-t border-border/60 hover:bg-secondary/20">
