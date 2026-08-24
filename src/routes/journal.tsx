@@ -82,7 +82,11 @@ function Section({ title, icon, entries }: { title: string; icon: React.ReactNod
               <tr><td colSpan={11} className="px-3 py-8 text-center text-muted-foreground">No entries yet.</td></tr>
             )}
             {entries.map((e) => {
-              const p = pct(e.current_price, e.entry_price);
+              // For closed TP hits, show the realized return at target (peak), not the pulled-back price.
+              const closedWin = e.status === "winner";
+              const p = closedWin
+                ? Math.max(pct(e.peak_price, e.entry_price) ?? 10, 10)
+                : pct(e.current_price, e.entry_price);
               const target = e.entry_price ? e.entry_price * 1.1 : null;
               return (
                 <tr key={e.id} className="border-t border-border/60 hover:bg-secondary/20">
@@ -100,7 +104,12 @@ function Section({ title, icon, entries }: { title: string; icon: React.ReactNod
                   <td className="px-3 py-2 text-xs text-muted-foreground">{fmt(e.suggested_at)}</td>
                   <td className="px-3 py-2 font-mono">₹{Number(e.entry_price).toFixed(2)}</td>
                   <td className="px-3 py-2 font-mono text-muted-foreground">{target ? `₹${target.toFixed(2)}` : "—"}</td>
-                  <td className="px-3 py-2 font-mono">{e.current_price ? `₹${Number(e.current_price).toFixed(2)}` : "—"}</td>
+                  <td className="px-3 py-2 font-mono">
+                    {closedWin
+                      ? (e.peak_price ? `₹${Number(e.peak_price).toFixed(2)}` : target ? `₹${target.toFixed(2)}` : "—")
+                      : e.current_price ? `₹${Number(e.current_price).toFixed(2)}` : "—"}
+                    {closedWin && <div className="text-[9px] text-muted-foreground">at target</div>}
+                  </td>
                   <td className={`px-3 py-2 font-mono ${p == null ? "" : p >= 0 ? "text-success" : "text-destructive"}`}>
                     {p == null ? "—" : `${p >= 0 ? "+" : ""}${p.toFixed(1)}%`}
                   </td>
