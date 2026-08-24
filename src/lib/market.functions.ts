@@ -765,12 +765,23 @@ export const updateJournalOutcomes = createServerFn({ method: "POST" }).handler(
     const last = Number(q.ltp ?? 0);
     const entry = Number(e.entry_price ?? 0);
     if (entry <= 0 || last <= 0) continue;
-    const peak = Math.max(Number(e.peak_price ?? 0), last);
-    const ageMs = Date.now() - new Date(e.suggested_at).getTime();
+    const suggestedMs = new Date(e.suggested_at).getTime();
+    const target = entry * 1.10;
+    // Look at every candle since the suggestion so a target hit that
+    // happened between checks (price since pulled back) is still caught.
+    const since = (q.candles ?? []).filter((c: any) => c.t >= suggestedMs && Number.isFinite(c.h));
+    const histPeak = since.length ? Math.max(...since.map((c: any) => Number(c.h))) : 0;
+    const peak = Math.max(Number(e.peak_price ?? 0), histPeak, last);
+    const hitCandle = since.find((c: any) => Number(c.h) >= target);
+    const ageMs = Date.now() - suggestedMs;
     const threeMonths = 90 * 24 * 60 * 60 * 1000;
     let status = "in_progress";
     let closed_at: string | null = null;
-    if (peak >= entry * 1.10) { status = "winner"; closed_at = new Date().toISOString(); promoted++; }
+    if (peak >= target) {
+      status = "winner";
+      closed_at = new Date(hitCandle?.t ?? Date.now()).toISOString();
+      promoted++;
+    }
     else if (ageMs >= threeMonths && last < entry) { status = "loser"; closed_at = new Date().toISOString(); busted++; }
     else { updated++; }
     await supabaseAdmin.from("journal_entries").update({
