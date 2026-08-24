@@ -104,7 +104,12 @@ function Section({ title, icon, entries }: { title: string; icon: React.ReactNod
                   <td className="px-3 py-2 text-xs text-muted-foreground">{fmt(e.suggested_at)}</td>
                   <td className="px-3 py-2 font-mono">₹{Number(e.entry_price).toFixed(2)}</td>
                   <td className="px-3 py-2 font-mono text-muted-foreground">{target ? `₹${target.toFixed(2)}` : "—"}</td>
-                  <td className="px-3 py-2 font-mono">{e.current_price ? `₹${Number(e.current_price).toFixed(2)}` : "—"}</td>
+                  <td className="px-3 py-2 font-mono">
+                    {closedWin
+                      ? (e.peak_price ? `₹${Number(e.peak_price).toFixed(2)}` : target ? `₹${target.toFixed(2)}` : "—")
+                      : e.current_price ? `₹${Number(e.current_price).toFixed(2)}` : "—"}
+                    {closedWin && <div className="text-[9px] text-muted-foreground">at target</div>}
+                  </td>
                   <td className={`px-3 py-2 font-mono ${p == null ? "" : p >= 0 ? "text-success" : "text-destructive"}`}>
                     {p == null ? "—" : `${p >= 0 ? "+" : ""}${p.toFixed(1)}%`}
                   </td>
