@@ -411,6 +411,48 @@ export type Database = {
         }
         Relationships: []
       }
+      risk_reports: {
+        Row: {
+          actions: Json
+          created_at: string
+          drivers: Json
+          headline: string
+          headlines: Json
+          id: string
+          market: Json
+          risk_level: string
+          risk_score: number
+          source: string
+          summary: string
+        }
+        Insert: {
+          actions?: Json
+          created_at?: string
+          drivers?: Json
+          headline?: string
+          headlines?: Json
+          id?: string
+          market?: Json
+          risk_level?: string
+          risk_score?: number
+          source?: string
+          summary?: string
+        }
+        Update: {
+          actions?: Json
+          created_at?: string
+          drivers?: Json
+          headline?: string
+          headlines?: Json
+          id?: string
+          market?: Json
+          risk_level?: string
+          risk_score?: number
+          source?: string
+          summary?: string
+        }
+        Relationships: []
+      }
       stock_universe: {
         Row: {
           active: boolean
