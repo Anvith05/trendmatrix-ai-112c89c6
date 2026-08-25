@@ -3,9 +3,9 @@ import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { SiteNav } from "@/components/SiteNav";
 import { Ticker } from "@/components/Ticker";
-import { getLatestRankings, getQuote, getRecommendations, markPickRead, removePick, runAgents } from "@/lib/market.functions";
+import { getLatestRankings, getQuote, getRecommendations, getRiskRadar, markPickRead, removePick, runAgents } from "@/lib/market.functions";
 import { supabase } from "@/integrations/supabase/client";
-import { Sparkles, TrendingUp, Loader2, RefreshCw, ArrowRight, Trash2, Upload, X, BookOpenCheck } from "lucide-react";
+import { Sparkles, TrendingUp, Loader2, RefreshCw, ArrowRight, Trash2, Upload, X, BookOpenCheck, ShieldAlert } from "lucide-react";
 
 
 export const Route = createFileRoute("/picks")({
@@ -44,6 +44,8 @@ function Picks() {
   const fetchRecs = useServerFn(getRecommendations);
   const fetchRankings = useServerFn(getLatestRankings);
   const runAgentsFn = useServerFn(runAgents);
+  const fetchRisk = useServerFn(getRiskRadar);
+  const [risk, setRisk] = useState<any>(null);
   const [data, setData] = useState<{ active: Rec[]; history: Rec[] } | null>(null);
   const [, setRankings] = useState<any[]>([]); // kept for future use
   const [loading, setLoading] = useState(true);
@@ -55,6 +57,7 @@ function Picks() {
       const [recs, rk] = await Promise.all([fetchRecs(), fetchRankings()]);
       setData(recs);
       setRankings((rk as any)?.rankings ?? []);
+      try { setRisk(((await fetchRisk()) as any)?.latest ?? null); } catch { /* radar optional */ }
     } finally { setLoading(false); }
   }
   useEffect(() => { load(); }, []);
@@ -87,6 +90,20 @@ function Picks() {
             Re-scan now
           </button>
         </div>
+
+        {risk && risk.risk_level !== "low" && (
+          <Link to="/risk" className="mb-6 block rounded-xl border border-destructive/40 bg-destructive/10 p-4 transition hover:border-destructive">
+            <div className="flex items-start gap-3">
+              <ShieldAlert className="mt-0.5 h-5 w-5 text-destructive" />
+              <div>
+                <div className="text-sm font-semibold text-destructive">
+                  Market risk {risk.risk_level} ({risk.risk_score}/100){risk.risk_score >= 75 ? " — new entries paused" : ""}
+                </div>
+                <div className="text-xs text-muted-foreground">{risk.headline} · Open the Risk Radar for reasons and protective actions.</div>
+              </div>
+            </div>
+          </Link>
+        )}
 
         {/* Overall top picks */}
         <section className="mb-10">
