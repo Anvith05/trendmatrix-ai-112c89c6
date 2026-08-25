@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TrainingRouteImport } from './routes/training'
+import { Route as RiskRouteImport } from './routes/risk'
 import { Route as ResearchRouteImport } from './routes/research'
 import { Route as PicksRouteImport } from './routes/picks'
 import { Route as JournalRouteImport } from './routes/journal'
@@ -25,6 +26,11 @@ import { Route as ApiPublicRunAgentsRouteImport } from './routes/api/public/run-
 const TrainingRoute = TrainingRouteImport.update({
   id: '/training',
   path: '/training',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RiskRoute = RiskRouteImport.update({
+  id: '/risk',
+  path: '/risk',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ResearchRoute = ResearchRouteImport.update({
@@ -91,6 +97,7 @@ export interface FileRoutesByFullPath {
   '/journal': typeof JournalRoute
   '/picks': typeof PicksRoute
   '/research': typeof ResearchRoute
+  '/risk': typeof RiskRoute
   '/training': typeof TrainingRoute
   '/sectors/$sectorId': typeof SectorsSectorIdRoute
   '/sectors/': typeof SectorsIndexRoute
@@ -105,6 +112,7 @@ export interface FileRoutesByTo {
   '/journal': typeof JournalRoute
   '/picks': typeof PicksRoute
   '/research': typeof ResearchRoute
+  '/risk': typeof RiskRoute
   '/training': typeof TrainingRoute
   '/sectors/$sectorId': typeof SectorsSectorIdRoute
   '/sectors': typeof SectorsIndexRoute
@@ -120,6 +128,7 @@ export interface FileRoutesById {
   '/journal': typeof JournalRoute
   '/picks': typeof PicksRoute
   '/research': typeof ResearchRoute
+  '/risk': typeof RiskRoute
   '/training': typeof TrainingRoute
   '/sectors/$sectorId': typeof SectorsSectorIdRoute
   '/sectors/': typeof SectorsIndexRoute
@@ -136,6 +145,7 @@ export interface FileRouteTypes {
     | '/journal'
     | '/picks'
     | '/research'
+    | '/risk'
     | '/training'
     | '/sectors/$sectorId'
     | '/sectors/'
@@ -150,6 +160,7 @@ export interface FileRouteTypes {
     | '/journal'
     | '/picks'
     | '/research'
+    | '/risk'
     | '/training'
     | '/sectors/$sectorId'
     | '/sectors'
@@ -164,6 +175,7 @@ export interface FileRouteTypes {
     | '/journal'
     | '/picks'
     | '/research'
+    | '/risk'
     | '/training'
     | '/sectors/$sectorId'
     | '/sectors/'
@@ -179,6 +191,7 @@ export interface RootRouteChildren {
   JournalRoute: typeof JournalRoute
   PicksRoute: typeof PicksRoute
   ResearchRoute: typeof ResearchRoute
+  RiskRoute: typeof RiskRoute
   TrainingRoute: typeof TrainingRoute
   SectorsSectorIdRoute: typeof SectorsSectorIdRoute
   SectorsIndexRoute: typeof SectorsIndexRoute
@@ -193,6 +206,13 @@ declare module '@tanstack/react-router' {
       path: '/training'
       fullPath: '/training'
       preLoaderRoute: typeof TrainingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/risk': {
+      id: '/risk'
+      path: '/risk'
+      fullPath: '/risk'
+      preLoaderRoute: typeof RiskRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/research': {
@@ -283,6 +303,7 @@ const rootRouteChildren: RootRouteChildren = {
   JournalRoute: JournalRoute,
   PicksRoute: PicksRoute,
   ResearchRoute: ResearchRoute,
+  RiskRoute: RiskRoute,
   TrainingRoute: TrainingRoute,
   SectorsSectorIdRoute: SectorsSectorIdRoute,
   SectorsIndexRoute: SectorsIndexRoute,
