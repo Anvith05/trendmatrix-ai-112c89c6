@@ -317,7 +317,14 @@ export const runAgents = createServerFn({ method: "POST" })
         ...(runningRows ?? []).map((r) => r.symbol),
       ]);
 
-      const newPicks = candidates
+      // 3b) Macro guard — if the Risk Radar says the whole market is under
+      //     stress, stop issuing fresh breakout entries (capital protection).
+      const { data: riskRow } = await supabaseAdmin
+        .from("risk_reports").select("risk_level, risk_score, headline")
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      const riskBlocked = riskRow?.risk_level === "critical" || (riskRow?.risk_score ?? 0) >= 75;
+
+      const newPicks = (riskBlocked ? [] : candidates)
         .filter(({ x }) => !activeSet.has(x.u.symbol))
 
         .map(({ x, s }) => ({
