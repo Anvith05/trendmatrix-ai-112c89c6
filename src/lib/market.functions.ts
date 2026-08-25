@@ -317,7 +317,14 @@ export const runAgents = createServerFn({ method: "POST" })
         ...(runningRows ?? []).map((r) => r.symbol),
       ]);
 
-      const newPicks = candidates
+      // 3b) Macro guard — if the Risk Radar says the whole market is under
+      //     stress, stop issuing fresh breakout entries (capital protection).
+      const { data: riskRow } = await supabaseAdmin
+        .from("risk_reports").select("risk_level, risk_score, headline")
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      const riskBlocked = riskRow?.risk_level === "critical" || (riskRow?.risk_score ?? 0) >= 75;
+
+      const newPicks = (riskBlocked ? [] : candidates)
         .filter(({ x }) => !activeSet.has(x.u.symbol))
 
         .map(({ x, s }) => ({
@@ -341,7 +348,10 @@ export const runAgents = createServerFn({ method: "POST" })
         scanned: universe.length, ranked: rows.length,
       }).eq("id", run.id);
 
-      return { run_id: run.id, scanned: universe.length, ranked: rows.length, new_picks: newPicks.length };
+      return {
+        run_id: run.id, scanned: universe.length, ranked: rows.length, new_picks: newPicks.length,
+        risk_blocked: riskBlocked, risk_level: riskRow?.risk_level ?? null, risk_headline: riskRow?.headline ?? null,
+      };
     } catch (e: any) {
       console.error("[runAgents]", e);
       await supabaseAdmin.from("agent_runs").update({
