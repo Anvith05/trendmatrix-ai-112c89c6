@@ -19,6 +19,7 @@ import { Route as AgentsRouteImport } from './routes/agents'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SectorsIndexRouteImport } from './routes/sectors.index'
 import { Route as SectorsSectorIdRouteImport } from './routes/sectors.$sectorId'
+import { Route as ApiPublicRunRiskScanRouteImport } from './routes/api/public/run-risk-scan'
 import { Route as ApiPublicRunAgentsRouteImport } from './routes/api/public/run-agents'
 
 const TrainingRoute = TrainingRouteImport.update({
@@ -71,6 +72,11 @@ const SectorsSectorIdRoute = SectorsSectorIdRouteImport.update({
   path: '/sectors/$sectorId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicRunRiskScanRoute = ApiPublicRunRiskScanRouteImport.update({
+  id: '/api/public/run-risk-scan',
+  path: '/api/public/run-risk-scan',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicRunAgentsRoute = ApiPublicRunAgentsRouteImport.update({
   id: '/api/public/run-agents',
   path: '/api/public/run-agents',
@@ -89,6 +95,7 @@ export interface FileRoutesByFullPath {
   '/sectors/$sectorId': typeof SectorsSectorIdRoute
   '/sectors/': typeof SectorsIndexRoute
   '/api/public/run-agents': typeof ApiPublicRunAgentsRoute
+  '/api/public/run-risk-scan': typeof ApiPublicRunRiskScanRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -102,6 +109,7 @@ export interface FileRoutesByTo {
   '/sectors/$sectorId': typeof SectorsSectorIdRoute
   '/sectors': typeof SectorsIndexRoute
   '/api/public/run-agents': typeof ApiPublicRunAgentsRoute
+  '/api/public/run-risk-scan': typeof ApiPublicRunRiskScanRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -116,6 +124,7 @@ export interface FileRoutesById {
   '/sectors/$sectorId': typeof SectorsSectorIdRoute
   '/sectors/': typeof SectorsIndexRoute
   '/api/public/run-agents': typeof ApiPublicRunAgentsRoute
+  '/api/public/run-risk-scan': typeof ApiPublicRunRiskScanRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -131,6 +140,7 @@ export interface FileRouteTypes {
     | '/sectors/$sectorId'
     | '/sectors/'
     | '/api/public/run-agents'
+    | '/api/public/run-risk-scan'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -144,6 +154,7 @@ export interface FileRouteTypes {
     | '/sectors/$sectorId'
     | '/sectors'
     | '/api/public/run-agents'
+    | '/api/public/run-risk-scan'
   id:
     | '__root__'
     | '/'
@@ -157,6 +168,7 @@ export interface FileRouteTypes {
     | '/sectors/$sectorId'
     | '/sectors/'
     | '/api/public/run-agents'
+    | '/api/public/run-risk-scan'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -171,6 +183,7 @@ export interface RootRouteChildren {
   SectorsSectorIdRoute: typeof SectorsSectorIdRoute
   SectorsIndexRoute: typeof SectorsIndexRoute
   ApiPublicRunAgentsRoute: typeof ApiPublicRunAgentsRoute
+  ApiPublicRunRiskScanRoute: typeof ApiPublicRunRiskScanRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -245,6 +258,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SectorsSectorIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/run-risk-scan': {
+      id: '/api/public/run-risk-scan'
+      path: '/api/public/run-risk-scan'
+      fullPath: '/api/public/run-risk-scan'
+      preLoaderRoute: typeof ApiPublicRunRiskScanRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/run-agents': {
       id: '/api/public/run-agents'
       path: '/api/public/run-agents'
@@ -267,6 +287,7 @@ const rootRouteChildren: RootRouteChildren = {
   SectorsSectorIdRoute: SectorsSectorIdRoute,
   SectorsIndexRoute: SectorsIndexRoute,
   ApiPublicRunAgentsRoute: ApiPublicRunAgentsRoute,
+  ApiPublicRunRiskScanRoute: ApiPublicRunRiskScanRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
