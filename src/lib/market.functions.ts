@@ -343,7 +343,7 @@ export const runAgents = createServerFn({ method: "POST" })
 
       return {
         run_id: run.id, scanned: universe.length, ranked: rows.length, new_picks: newPicks.length,
-        risk_blocked: riskBlocked, risk_level: riskRow?.risk_level ?? null, risk_headline: riskRow?.headline ?? null,
+        
       };
     } catch (e: any) {
       console.error("[runAgents]", e);
