@@ -20,7 +20,7 @@ export function SiteNav() {
             { to: "/research", label: "Research" },
             { to: "/agents", label: "AI Agents" },
             { to: "/sectors", label: "Sectors" },
-            { to: "/risk", label: "Risk Radar" },
+            
             { to: "/training", label: "Training Lab" },
           ].map((l) => (
             <Link
