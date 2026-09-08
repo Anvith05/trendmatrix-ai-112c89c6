@@ -1201,7 +1201,7 @@ export async function computeOutcomeStats(): Promise<{ stats: OutcomeStats; lose
 // get a small boost. Keeps the scanner honest instead of repeating mistakes.
 export async function loadOutcomeAdjustments() {
   const { stats } = await computeOutcomeStats();
-  const delta = (o?: { wins: number; losses: number; rate: number }) => {
+  const delta = (o?: { wins: number; losses: number; rate: number }): number => {
     if (!o) return 0;
     const n = o.wins + o.losses;
     if (n < 3) return 0;
@@ -1213,10 +1213,12 @@ export async function loadOutcomeAdjustments() {
   return {
     stats,
     adjust(sector: string | null | undefined, tags: string[]) {
-      let d = delta(stats.sectors[sector ?? "Unknown"]);
-      const tagDeltas = tags.map((t) => delta(stats.tags[t])).filter(Boolean);
+      let d: number = delta(stats.sectors[sector ?? "Unknown"]);
+      const tagDeltas: number[] = tags.map((t) => delta(stats.tags[t])).filter((v) => v !== 0);
       if (tagDeltas.length) d += tagDeltas.reduce((a, b) => a + b, 0) / tagDeltas.length;
       return Math.max(-10, Math.min(6, d));
+    },
+
     },
   };
 }
