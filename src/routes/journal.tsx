@@ -3,9 +3,11 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { SiteNav } from "@/components/SiteNav";
 import { Ticker } from "@/components/Ticker";
-import { getJournal, updateJournalOutcomes, getOutcomeLearning, analyzeOutcomes } from "@/lib/market.functions";
+import { getJournal, updateJournalOutcomes } from "@/lib/market.functions";
 import { JournalAgent } from "@/components/JournalAgent";
-import { BookOpen, Loader2, RefreshCw, Trophy, TrendingDown, Hourglass, Percent, Target, Brain } from "lucide-react";
+import { OutcomeLearning } from "@/components/OutcomeLearning";
+import { BookOpen, Loader2, RefreshCw, Trophy, TrendingDown, Hourglass, Percent, Target } from "lucide-react";
+
 
 
 export const Route = createFileRoute("/journal")({
