@@ -1126,3 +1126,198 @@ export const getSectorDetail = createServerFn({ method: "GET" })
     return { run: lastRun, sector, stocks };
   });
 
+
+// === Outcome learning: study losers and winners, feed lessons back ===
+// Deterministic performance stats per sector / tag / score-band, computed from
+// the real journal history. Used both by the UI and by the scanner to bias
+// future picks away from patterns that keep failing.
+type OutcomeStats = {
+  sectors: Record<string, { wins: number; losses: number; rate: number }>;
+  tags: Record<string, { wins: number; losses: number; rate: number }>;
+  scoreBands: Record<string, { wins: number; losses: number; rate: number }>;
+  totals: { graded: number; wins: number; losses: number; rate: number };
+};
+
+function bandOf(s: number) {
+  if (s >= 85) return "85+";
+  if (s >= 78) return "78-84";
+  if (s >= 72) return "72-77";
+  return "<72";
+}
+
+export async function computeOutcomeStats(): Promise<{ stats: OutcomeStats; losers: any[]; winners: any[] }> {
+  const { data } = await supabaseAdmin
+    .from("journal_entries").select("*")
+    .order("suggested_at", { ascending: false }).limit(500);
+  const rows = data ?? [];
+  const ret = (e: any) => {
+    const en = Number(e.entry_price ?? 0), cu = Number(e.current_price ?? 0);
+    return en && cu ? ((cu - en) / en) * 100 : 0;
+  };
+  const isWin = (e: any) => e.status === "winner";
+  // A "failure" = closed loser, or a running trade more than 45 days old and
+  // still under water (it is on track to be graded a loser).
+  const ageDays = (e: any) => Math.max(0, (Date.now() - new Date(e.suggested_at).getTime()) / 86400000);
+  const isFail = (e: any) => e.status === "loser" || (e.status === "in_progress" && ageDays(e) >= 45 && ret(e) < -2);
+
+  const graded = rows.filter((e) => isWin(e) || isFail(e));
+  const mk = () => ({ wins: 0, losses: 0, rate: 0 });
+  const stats: OutcomeStats = { sectors: {}, tags: {}, scoreBands: {}, totals: { graded: 0, wins: 0, losses: 0, rate: 0 } };
+
+  for (const e of graded) {
+    const win = isWin(e);
+    const sec = e.sector ?? "Unknown";
+    stats.sectors[sec] ??= mk();
+    win ? stats.sectors[sec].wins++ : stats.sectors[sec].losses++;
+    const band = bandOf(Number(e.swing_score ?? 0));
+    stats.scoreBands[band] ??= mk();
+    win ? stats.scoreBands[band].wins++ : stats.scoreBands[band].losses++;
+    for (const t of ((e.tags as string[] | null) ?? [])) {
+      stats.tags[t] ??= mk();
+      win ? stats.tags[t].wins++ : stats.tags[t].losses++;
+    }
+    win ? stats.totals.wins++ : stats.totals.losses++;
+    stats.totals.graded++;
+  }
+  const fin = (o: any) => { o.rate = o.wins + o.losses ? o.wins / (o.wins + o.losses) : 0; };
+  Object.values(stats.sectors).forEach(fin);
+  Object.values(stats.tags).forEach(fin);
+  Object.values(stats.scoreBands).forEach(fin);
+  fin(stats.totals);
+
+  return {
+    stats,
+    losers: graded.filter(isFail),
+    winners: graded.filter(isWin),
+  };
+}
+
+// Score adjustment applied by the scanner: sectors and tags with a proven poor
+// hit rate (>=3 graded trades, <35% win rate) get penalised; proven strong ones
+// get a small boost. Keeps the scanner honest instead of repeating mistakes.
+export async function loadOutcomeAdjustments() {
+  const { stats } = await computeOutcomeStats();
+  const delta = (o?: { wins: number; losses: number; rate: number }) => {
+    if (!o) return 0;
+    const n = o.wins + o.losses;
+    if (n < 3) return 0;
+    if (o.rate < 0.35) return -6;
+    if (o.rate < 0.5) return -3;
+    if (o.rate >= 0.75) return 3;
+    return 0;
+  };
+  return {
+    stats,
+    adjust(sector: string | null | undefined, tags: string[]) {
+      let d = delta(stats.sectors[sector ?? "Unknown"]);
+      const tagDeltas = tags.map((t) => delta(stats.tags[t])).filter(Boolean);
+      if (tagDeltas.length) d += tagDeltas.reduce((a, b) => a + b, 0) / tagDeltas.length;
+      return Math.max(-10, Math.min(6, d));
+    },
+  };
+}
+
+export const getOutcomeLearning = createServerFn({ method: "GET" }).handler(async () => {
+  const { stats } = await computeOutcomeStats();
+  const { data: lessons } = await supabaseAdmin
+    .from("agent_feedback").select("*")
+    .eq("agent", "outcome_learning").eq("role", "rule")
+    .order("created_at", { ascending: false }).limit(20);
+  return { stats, lessons: lessons ?? [] };
+});
+
+// AI post-mortem: for every failing trade decide whether the pick was a genuine
+// setup that simply did not work, or a repeatable mistake in the selection
+// logic — and extract what winners had in common. Lessons are stored as agent
+// rules so every later scan can consult them.
+export const analyzeOutcomes = createServerFn({ method: "POST" }).handler(async () => {
+  const LOVABLE_API_KEY = process.env.LOVABLE_API_KEY;
+  if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY missing");
+  const { stats, losers, winners } = await computeOutcomeStats();
+  if (!losers.length && !winners.length) {
+    return { verdicts: [], lessons: [], stats, note: "No graded trades yet." };
+  }
+
+  const slim = (e: any) => ({
+    symbol: e.symbol, sector: e.sector, kind: e.kind,
+    suggested_at: e.suggested_at, entry: Number(e.entry_price),
+    current: Number(e.current_price ?? 0), peak: Number(e.peak_price ?? 0),
+    return_pct: e.entry_price ? Number(((((e.current_price ?? 0) - e.entry_price) / e.entry_price) * 100).toFixed(1)) : 0,
+    max_fav_pct: e.entry_price && e.peak_price ? Number((((e.peak_price - e.entry_price) / e.entry_price) * 100).toFixed(1)) : 0,
+    days: Math.round((Date.now() - new Date(e.suggested_at).getTime()) / 86400000),
+    swing_score: e.swing_score, tags: e.tags, status: e.status,
+  });
+
+  const payload = {
+    strategy: "Strong monthly trend + weekly consolidation + sector sync; entry at breakout line; target +10% within 90 days.",
+    performance_stats: stats,
+    failing_trades: losers.slice(0, 40).map(slim),
+    winning_trades: winners.slice(0, 40).map(slim),
+  };
+
+  const body = {
+    model: "google/gemini-2.5-flash",
+    messages: [
+      { role: "system", content: "You are the post-mortem agent of an Indian swing-trading system. For every failing trade decide honestly whether it was a GENUINE setup that just did not work (market/sector drift, no edge broken) or a MISTAKE in the selection logic (chased extended price, weak volume, thin base, wrong sector timing, low score band). Then extract what the winners had in common. Only output what the supplied data supports. Respond by calling post_mortem." },
+      { role: "user", content: JSON.stringify(payload) },
+    ],
+    tools: [{
+      type: "function",
+      function: {
+        name: "post_mortem",
+        description: "Loser diagnosis and lessons",
+        parameters: {
+          type: "object",
+          properties: {
+            verdicts: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  symbol: { type: "string" },
+                  verdict: { type: "string", enum: ["genuine", "mistake"] },
+                  reason: { type: "string" },
+                  fix: { type: "string", description: "What to change next time; empty for genuine" },
+                },
+                required: ["symbol", "verdict", "reason", "fix"],
+              },
+            },
+            winner_pattern: { type: "array", items: { type: "string" }, description: "What winners consistently had" },
+            lessons: { type: "array", items: { type: "string" }, description: "Concrete selection-rule changes, quantified" },
+          },
+          required: ["verdicts", "winner_pattern", "lessons"],
+        },
+      },
+    }],
+    tool_choice: { type: "function", function: { name: "post_mortem" } },
+  };
+
+  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    if (res.status === 429) throw new Error("Rate limit reached, please retry in a moment.");
+    if (res.status === 402) throw new Error("AI credits exhausted. Add credits to continue.");
+    throw new Error(`AI gateway ${res.status}: ${t.slice(0, 200)}`);
+  }
+  const json: any = await res.json();
+  const call = json.choices?.[0]?.message?.tool_calls?.[0];
+  const out = call ? JSON.parse(call.function.arguments) : null;
+  if (!out) throw new Error("No analysis returned");
+
+  const rows = [
+    ...(out.lessons ?? []).map((m: string) => ({ agent: "outcome_learning", role: "rule", message: m, context: { kind: "lesson" } })),
+    ...(out.winner_pattern ?? []).map((m: string) => ({ agent: "outcome_learning", role: "rule", message: `Winner pattern: ${m}`, context: { kind: "winner_pattern" } })),
+    ...(out.verdicts ?? []).filter((v: any) => v.verdict === "mistake").map((v: any) => ({
+      agent: "outcome_learning", role: "rule",
+      message: `${v.symbol} failed by mistake — ${v.reason}. Fix: ${v.fix}`,
+      context: { kind: "loser_fix", symbol: v.symbol },
+    })),
+  ];
+  if (rows.length) await supabaseAdmin.from("agent_feedback").insert(rows);
+
+  return { ...out, stats };
+});
