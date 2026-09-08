@@ -256,7 +256,10 @@ function Journal() {
               ))}
             </div>
 
+            <OutcomeLearning />
+
             <JournalAgent />
+
 
             <Section title="Picks log (stocks & ETFs)" icon={<BookOpen className="h-4 w-4 text-primary" />} entries={shown} />
           </>
