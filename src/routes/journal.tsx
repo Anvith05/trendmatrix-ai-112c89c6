@@ -5,7 +5,10 @@ import { SiteNav } from "@/components/SiteNav";
 import { Ticker } from "@/components/Ticker";
 import { getJournal, updateJournalOutcomes } from "@/lib/market.functions";
 import { JournalAgent } from "@/components/JournalAgent";
+import { OutcomeLearning } from "@/components/OutcomeLearning";
 import { BookOpen, Loader2, RefreshCw, Trophy, TrendingDown, Hourglass, Percent, Target } from "lucide-react";
+
+
 
 export const Route = createFileRoute("/journal")({
   component: Journal,
@@ -253,7 +256,10 @@ function Journal() {
               ))}
             </div>
 
+            <OutcomeLearning />
+
             <JournalAgent />
+
 
             <Section title="Picks log (stocks & ETFs)" icon={<BookOpen className="h-4 w-4 text-primary" />} entries={shown} />
           </>
