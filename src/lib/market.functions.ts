@@ -1218,9 +1218,8 @@ export async function loadOutcomeAdjustments() {
       if (tagDeltas.length) d += tagDeltas.reduce((a, b) => a + b, 0) / tagDeltas.length;
       return Math.max(-10, Math.min(6, d));
     },
-
-    },
   };
+
 }
 
 export const getOutcomeLearning = createServerFn({ method: "GET" }).handler(async () => {
