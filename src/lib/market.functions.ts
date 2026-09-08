@@ -280,6 +280,7 @@ export const runAgents = createServerFn({ method: "POST" })
       //    skipped — too late to enter.
       //    Macro and historical-pattern scores are EXCLUDED from selection
       //    (info-only) per user requirement.
+      const learning = await loadOutcomeAdjustments();
       const candidates = results
         .map((x) => {
           const sector = sectorScore[x.u.sector] ?? 60;
@@ -289,9 +290,12 @@ export const runAgents = createServerFn({ method: "POST" })
             reasoning: { monthly: x.m.reason, weekly: x.w.reason, volume: x.v.reason, rs: x.r.reason, fundamental: x.f.reason },
           } as any);
           // Composite quality (no macro, no history): swing + volume + weekly base
-          const quality = s.swing * 0.7 + x.v.score * 0.2 + x.w.score * 0.1;
-          return { x, s, quality };
+          // then adjusted by what past winners/losers taught us.
+          const learned = learning.adjust(x.u.sector, x.tags ?? []);
+          const quality = s.swing * 0.7 + x.v.score * 0.2 + x.w.score * 0.1 + learned;
+          return { x, s, quality, learned };
         })
+
         .filter(({ s, x, quality }) =>
           x.breakout.in_window &&                  // within breakout → +10% zone
           x.breakout.bars_since <= 25 &&           // breakout is recent
