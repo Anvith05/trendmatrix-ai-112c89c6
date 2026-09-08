@@ -717,13 +717,17 @@ export const getJournal = createServerFn({ method: "GET" }).handler(async () => 
     .from("journal_entries").select("*")
     .order("suggested_at", { ascending: false }).limit(500);
 
-  // De-duplicate: keep only the latest entry per symbol
-  const seen = new Set<string>();
+  // History is immutable: every closed trade (TP hit / loser) stays in the log
+  // forever, even if the same symbol is suggested again later. Only
+  // still-running duplicates of the same symbol are collapsed to the newest.
+  const seenRunning = new Set<string>();
   const entries = (data ?? []).filter((e) => {
-    if (seen.has(e.symbol)) return false;
-    seen.add(e.symbol);
+    if (e.status !== "in_progress") return true;
+    if (seenRunning.has(e.symbol)) return false;
+    seenRunning.add(e.symbol);
     return true;
   });
+
 
   const ret = (e: any) => {
     const entry = Number(e.entry_price ?? 0);
