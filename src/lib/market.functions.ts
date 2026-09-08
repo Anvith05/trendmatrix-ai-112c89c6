@@ -722,15 +722,22 @@ export const getJournal = createServerFn({ method: "GET" }).handler(async () => 
     .order("suggested_at", { ascending: false }).limit(500);
 
   // History is immutable: every closed trade (TP hit / loser) stays in the log
-  // forever, even if the same symbol is suggested again later. Only
-  // still-running duplicates of the same symbol are collapsed to the newest.
+  // forever, even if the same symbol is suggested again later. We only collapse
+  // (a) exact duplicate rows of the same trade (same symbol, day and entry) and
+  // (b) multiple still-running rows of one symbol.
+  const seenTrade = new Set<string>();
   const seenRunning = new Set<string>();
   const entries = (data ?? []).filter((e) => {
+    const day = new Date(e.suggested_at).toISOString().slice(0, 10);
+    const key = `${e.symbol}|${day}|${Number(e.entry_price).toFixed(2)}`;
+    if (seenTrade.has(key)) return false;
+    seenTrade.add(key);
     if (e.status !== "in_progress") return true;
     if (seenRunning.has(e.symbol)) return false;
     seenRunning.add(e.symbol);
     return true;
   });
+
 
 
   const ret = (e: any) => {
