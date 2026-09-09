@@ -725,18 +725,27 @@ export const getJournal = createServerFn({ method: "GET" }).handler(async () => 
   // forever, even if the same symbol is suggested again later. We only collapse
   // (a) exact duplicate rows of the same trade (same symbol, day and entry) and
   // (b) multiple still-running rows of one symbol.
-  const seenTrade = new Set<string>();
+  const rows = data ?? [];
+  // A closed trade is identified by symbol + entry price + close date. The same
+  // trade can have been logged on several scan days before it closed, so we keep
+  // only the earliest suggestion of each closed trade.
+  const closedKeep = new Map<string, any>();
+  for (const e of rows) {
+    if (e.status === "in_progress") continue;
+    const closedDay = e.closed_at ? new Date(e.closed_at).toISOString().slice(0, 10) : e.status;
+    const key = `${e.symbol}|${Number(e.entry_price).toFixed(2)}|${closedDay}`;
+    const prev = closedKeep.get(key);
+    if (!prev || new Date(e.suggested_at) < new Date(prev.suggested_at)) closedKeep.set(key, e);
+  }
+  const keepIds = new Set([...closedKeep.values()].map((e) => e.id));
   const seenRunning = new Set<string>();
-  const entries = (data ?? []).filter((e) => {
-    const day = new Date(e.suggested_at).toISOString().slice(0, 10);
-    const key = `${e.symbol}|${day}|${Number(e.entry_price).toFixed(2)}`;
-    if (seenTrade.has(key)) return false;
-    seenTrade.add(key);
-    if (e.status !== "in_progress") return true;
+  const entries = rows.filter((e) => {
+    if (e.status !== "in_progress") return keepIds.has(e.id);
     if (seenRunning.has(e.symbol)) return false;
     seenRunning.add(e.symbol);
     return true;
   });
+
 
 
 
