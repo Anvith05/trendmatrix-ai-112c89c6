@@ -732,7 +732,8 @@ export const getJournal = createServerFn({ method: "GET" }).handler(async () => 
   const closedKeep = new Map<string, any>();
   for (const e of rows) {
     if (e.status === "in_progress") continue;
-    const key = `${e.symbol}|${Number(e.entry_price).toFixed(2)}|${e.closed_at ?? e.status}`;
+    const closedDay = e.closed_at ? new Date(e.closed_at).toISOString().slice(0, 10) : e.status;
+    const key = `${e.symbol}|${Number(e.entry_price).toFixed(2)}|${closedDay}`;
     const prev = closedKeep.get(key);
     if (!prev || new Date(e.suggested_at) < new Date(prev.suggested_at)) closedKeep.set(key, e);
   }
