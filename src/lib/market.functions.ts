@@ -713,6 +713,45 @@ export const markBacktestTradeWrong = createServerFn({ method: "POST" })
   });
 
 
+// User deletes a losing/unwanted trade from the journal. The row is removed,
+// the linked recommendation is archived, and the AI stores a rule so it avoids
+// repeating the same kind of setup.
+export const discardJournalTrade = createServerFn({ method: "POST" })
+  .inputValidator((d: { id: string; reason?: string }) => d)
+  .handler(async ({ data }) => {
+    const { data: e } = await supabaseAdmin
+      .from("journal_entries").select("*").eq("id", data.id).maybeSingle();
+    if (!e) throw new Error("not found");
+
+    const entry = Number(e.entry_price ?? 0);
+    const cur = Number(e.current_price ?? 0);
+    const retPct = entry && cur ? ((cur - entry) / entry) * 100 : 0;
+    const reason = (data.reason ?? "").trim() || "User judged this setup not worth investing in.";
+
+    if (e.recommendation_id) {
+      await supabaseAdmin.from("recommendations").update({
+        status: "historical",
+        archived_at: new Date().toISOString(),
+        outcome: "user_discarded",
+        removed_reason: reason,
+      }).eq("id", e.recommendation_id);
+    }
+
+    await supabaseAdmin.from("agent_feedback").insert({
+      agent: "master",
+      role: "rule",
+      message: `REJECTED SETUP: ${e.symbol} (${e.sector ?? "unknown sector"}, ${e.kind}) entered at ₹${entry.toFixed(2)} was discarded by the user at ${retPct.toFixed(1)}%. Do not suggest this stock or lookalike setups (same sector, similar score band and tags) again. Reason: ${reason}`,
+      context: {
+        symbol: e.symbol, sector: e.sector, kind: e.kind,
+        entry_price: entry, return_pct: retPct,
+        swing_score: e.swing_score, tags: e.tags, source: "journal_discard",
+      },
+    });
+
+    await supabaseAdmin.from("journal_entries").delete().eq("id", data.id);
+    return { ok: true };
+  });
+
 // === Journal ===
 // Target = +10% within 3 months. Winners include still-running positives,
 // losers include still-running negatives (only a hit target closes a trade).
