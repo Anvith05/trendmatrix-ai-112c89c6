@@ -3,10 +3,10 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { SiteNav } from "@/components/SiteNav";
 import { Ticker } from "@/components/Ticker";
-import { getJournal, updateJournalOutcomes } from "@/lib/market.functions";
+import { discardJournalTrade, getJournal, updateJournalOutcomes } from "@/lib/market.functions";
 import { JournalAgent } from "@/components/JournalAgent";
 import { OutcomeLearning } from "@/components/OutcomeLearning";
-import { BookOpen, Loader2, RefreshCw, Trophy, TrendingDown, Hourglass, Percent, Target } from "lucide-react";
+import { BookOpen, Loader2, RefreshCw, Trophy, TrendingDown, Hourglass, Percent, Target, Trash2 } from "lucide-react";
 
 
 
