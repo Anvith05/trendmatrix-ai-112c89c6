@@ -114,11 +114,12 @@ function Section({ title, icon, entries, onChanged }: { title: string; icon: Rea
               <th className="px-3 py-2">Status</th>
               <th className="px-3 py-2">Closed</th>
               <th className="px-3 py-2">Time held</th>
+              <th className="px-3 py-2"></th>
             </tr>
           </thead>
           <tbody>
             {entries.length === 0 && (
-              <tr><td colSpan={11} className="px-3 py-8 text-center text-muted-foreground">No entries yet.</td></tr>
+              <tr><td colSpan={12} className="px-3 py-8 text-center text-muted-foreground">No entries yet.</td></tr>
             )}
             {entries.map((e) => {
               // For closed TP hits, show the realized return at target (peak), not the pulled-back price.
@@ -157,6 +158,9 @@ function Section({ title, icon, entries, onChanged }: { title: string; icon: Rea
                   <td className="px-3 py-2 font-mono text-xs">
                     {humanDays(daysBetween(e.suggested_at, e.closed_at))}
                     {!e.closed_at && <span className="ml-1 text-[10px] text-muted-foreground">running</span>}
+                  </td>
+                  <td className="px-3 py-2">
+                    {isLoser(e) && <DiscardButton entry={e} onDone={onChanged} />}
                   </td>
                 </tr>
               );
@@ -297,7 +301,7 @@ function Journal() {
             <JournalAgent />
 
 
-            <Section title="Picks log (stocks & ETFs)" icon={<BookOpen className="h-4 w-4 text-primary" />} entries={shown} />
+            <Section title="Picks log (stocks & ETFs)" icon={<BookOpen className="h-4 w-4 text-primary" />} entries={shown} onChanged={load} />
           </>
         )}
       </div>
