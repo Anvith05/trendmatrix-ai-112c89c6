@@ -55,7 +55,43 @@ function StatusBadge({ s }: { s: string }) {
   return <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-mono uppercase text-primary">in progress</span>;
 }
 
-function Section({ title, icon, entries }: { title: string; icon: React.ReactNode; entries: Entry[] }) {
+function DiscardButton({ entry, onDone }: { entry: Entry; onDone: () => void }) {
+  const discard = useServerFn(discardJournalTrade);
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function go() {
+    setBusy(true);
+    try { await discard({ data: { id: entry.id, reason } }); setOpen(false); await onDone(); }
+    finally { setBusy(false); }
+  }
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} title="Delete this trade and teach the AI to avoid it"
+        className="inline-flex items-center gap-1 rounded-md border border-destructive/40 px-2 py-1 text-[11px] font-semibold text-destructive hover:bg-destructive/10">
+        <Trash2 className="h-3 w-3" /> Delete
+      </button>
+    );
+  }
+  return (
+    <div className="w-52 rounded-md border border-destructive/30 bg-destructive/5 p-2">
+      <textarea value={reason} onChange={(ev) => setReason(ev.target.value)} rows={2}
+        placeholder="Why is this a waste of time?"
+        className="w-full rounded border border-border bg-card px-2 py-1 text-[11px]" />
+      <div className="mt-1 flex justify-end gap-1">
+        <button onClick={() => setOpen(false)} className="rounded px-2 py-1 text-[11px] text-muted-foreground">Cancel</button>
+        <button onClick={go} disabled={busy}
+          className="inline-flex items-center gap-1 rounded bg-destructive px-2 py-1 text-[11px] font-semibold !text-white disabled:opacity-50">
+          {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />} Delete
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Section({ title, icon, entries, onChanged }: { title: string; icon: React.ReactNode; entries: Entry[]; onChanged: () => void }) {
   return (
     <section className="mb-8">
       <div className="mb-3 flex items-center gap-2">
