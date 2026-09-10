@@ -3,10 +3,10 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { SiteNav } from "@/components/SiteNav";
 import { Ticker } from "@/components/Ticker";
-import { getJournal, updateJournalOutcomes } from "@/lib/market.functions";
+import { discardJournalTrade, getJournal, updateJournalOutcomes } from "@/lib/market.functions";
 import { JournalAgent } from "@/components/JournalAgent";
 import { OutcomeLearning } from "@/components/OutcomeLearning";
-import { BookOpen, Loader2, RefreshCw, Trophy, TrendingDown, Hourglass, Percent, Target } from "lucide-react";
+import { BookOpen, Loader2, RefreshCw, Trophy, TrendingDown, Hourglass, Percent, Target, Trash2 } from "lucide-react";
 
 
 
@@ -55,7 +55,43 @@ function StatusBadge({ s }: { s: string }) {
   return <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-mono uppercase text-primary">in progress</span>;
 }
 
-function Section({ title, icon, entries }: { title: string; icon: React.ReactNode; entries: Entry[] }) {
+function DiscardButton({ entry, onDone }: { entry: Entry; onDone: () => void }) {
+  const discard = useServerFn(discardJournalTrade);
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function go() {
+    setBusy(true);
+    try { await discard({ data: { id: entry.id, reason } }); setOpen(false); await onDone(); }
+    finally { setBusy(false); }
+  }
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} title="Delete this trade and teach the AI to avoid it"
+        className="inline-flex items-center gap-1 rounded-md border border-destructive/40 px-2 py-1 text-[11px] font-semibold text-destructive hover:bg-destructive/10">
+        <Trash2 className="h-3 w-3" /> Delete
+      </button>
+    );
+  }
+  return (
+    <div className="w-52 rounded-md border border-destructive/30 bg-destructive/5 p-2">
+      <textarea value={reason} onChange={(ev) => setReason(ev.target.value)} rows={2}
+        placeholder="Why is this a waste of time?"
+        className="w-full rounded border border-border bg-card px-2 py-1 text-[11px]" />
+      <div className="mt-1 flex justify-end gap-1">
+        <button onClick={() => setOpen(false)} className="rounded px-2 py-1 text-[11px] text-muted-foreground">Cancel</button>
+        <button onClick={go} disabled={busy}
+          className="inline-flex items-center gap-1 rounded bg-destructive px-2 py-1 text-[11px] font-semibold !text-white disabled:opacity-50">
+          {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />} Delete
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Section({ title, icon, entries, onChanged }: { title: string; icon: React.ReactNode; entries: Entry[]; onChanged: () => void }) {
   return (
     <section className="mb-8">
       <div className="mb-3 flex items-center gap-2">
@@ -78,11 +114,12 @@ function Section({ title, icon, entries }: { title: string; icon: React.ReactNod
               <th className="px-3 py-2">Status</th>
               <th className="px-3 py-2">Closed</th>
               <th className="px-3 py-2">Time held</th>
+              <th className="px-3 py-2"></th>
             </tr>
           </thead>
           <tbody>
             {entries.length === 0 && (
-              <tr><td colSpan={11} className="px-3 py-8 text-center text-muted-foreground">No entries yet.</td></tr>
+              <tr><td colSpan={12} className="px-3 py-8 text-center text-muted-foreground">No entries yet.</td></tr>
             )}
             {entries.map((e) => {
               // For closed TP hits, show the realized return at target (peak), not the pulled-back price.
@@ -121,6 +158,9 @@ function Section({ title, icon, entries }: { title: string; icon: React.ReactNod
                   <td className="px-3 py-2 font-mono text-xs">
                     {humanDays(daysBetween(e.suggested_at, e.closed_at))}
                     {!e.closed_at && <span className="ml-1 text-[10px] text-muted-foreground">running</span>}
+                  </td>
+                  <td className="px-3 py-2">
+                    {isLoser(e) && <DiscardButton entry={e} onDone={onChanged} />}
                   </td>
                 </tr>
               );
@@ -261,7 +301,7 @@ function Journal() {
             <JournalAgent />
 
 
-            <Section title="Picks log (stocks & ETFs)" icon={<BookOpen className="h-4 w-4 text-primary" />} entries={shown} />
+            <Section title="Picks log (stocks & ETFs)" icon={<BookOpen className="h-4 w-4 text-primary" />} entries={shown} onChanged={load} />
           </>
         )}
       </div>
