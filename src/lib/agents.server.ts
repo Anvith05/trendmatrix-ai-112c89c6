@@ -127,13 +127,23 @@ export function scoreRS(candles: Candle[], benchmark: Candle[]): { score: number
 }
 
 export function scoreFundamental(q: YahooQuote): { score: number; reason: string } {
-  // Proxy: distance from 52w high (closer = stronger), market cap tier, RSI healthy zone
+  // Quality proxy built only from data Yahoo's free chart feed actually returns:
+  // distance from 52w high, liquidity (avg daily traded value) and RSI health.
+  // (Market cap is NOT available from the free feed, so it is not used.)
   const closes = q.candles.map((c) => c.c);
   const r = rsi(closes, 14);
   const distHigh = q.fiftyTwoHigh ? (q.ltp / q.fiftyTwoHigh) * 100 : 80;
-  const capTier = q.marketCap && q.marketCap > 1e10 ? 10 : 0;
+  const last20 = q.candles.slice(-20);
+  const avgValueCr = last20.length
+    ? last20.reduce((a, c) => a + c.c * (c.v || 0), 0) / last20.length / 1e7
+    : 0;
+  const liquidityPts = avgValueCr >= 50 ? 10 : avgValueCr >= 10 ? 5 : 0;
   const rsiBand = r > 45 && r < 75 ? 12 : 0;
-  return { score: Math.round(clamp(35 + (distHigh - 60) * 0.8 + capTier + rsiBand)), reason: `${distHigh.toFixed(0)}% of 52w hi, RSI ${r.toFixed(0)}` };
+  const score = Math.round(clamp(35 + (distHigh - 60) * 0.8 + liquidityPts + rsiBand));
+  return {
+    score,
+    reason: `35 + (${distHigh.toFixed(0)}%of52wHi−60)×0.8 + liquidity ${liquidityPts} (₹${avgValueCr.toFixed(0)}Cr/day) + RSI ${r.toFixed(0)} band ${rsiBand} = ${score}`,
+  };
 }
 
 export function combine(s: Omit<AgentScores, "swing" | "status">): AgentScores {
