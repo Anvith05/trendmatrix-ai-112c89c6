@@ -321,24 +321,111 @@ export const runAgents = createServerFn({ method: "POST" })
         ...(runningRows ?? []).map((r) => r.symbol),
       ]);
 
-      const newPicks = candidates
-        .filter(({ x }) => !activeSet.has(x.u.symbol))
+      // 4) AGENTIC DELIBERATION. The quantitative engine only builds a
+      //    shortlist; real LLM agents then debate it and the Master agent
+      //    makes the final call. Falls back to the quant filter if the AI
+      //    desk is unavailable.
+      const shortlist = results
+        .map((x) => {
+          const sector = sectorScore[x.u.sector] ?? 60;
+          const s = combine({
+            monthly: x.m.score, weekly: x.w.score, sector, history: x.history,
+            fundamental: x.f.score, macro, rs: x.r.score, volume: x.v.score,
+            reasoning: { monthly: x.m.reason, weekly: x.w.reason, volume: x.v.reason, rs: x.r.reason, fundamental: x.f.reason },
+          } as any);
+          return { x, s, sector, quality: s.swing + learning.adjust(x.u.sector, x.tags ?? []) };
+        })
+        .filter(({ x }) => !activeSet.has(x.u.symbol) && x.breakout.in_window && x.breakout.bars_since <= 25 && x.m.score >= 55)
+        .sort((a, b) => b.quality - a.quality)
+        .slice(0, 10);
 
-        .map(({ x, s }) => ({
+      let deliberation: any = null;
+      let approvedMap = new Map<string, any>();
+      if (shortlist.length) {
+        try {
+          const { deliberate } = await import("./deliberation.server");
+          const agentIds = ["sector", "monthly", "weekly", "history", "fundamental", "macro", "master"];
+          const rules: Record<string, string[]> = {};
+          const lessonRules = await loadAgentRules("outcome_learning");
+          for (const id of agentIds) {
+            rules[id] = await loadAgentRules(id === "weekly" ? "weekly_consolidation" : id);
+          }
+          const ex = lib.examples.slice(0, 40).map((e) =>
+            `${e.label}: trend=${e.monthly_trend ?? "?"}, base=${e.weekly_structure ?? "?"}, vol=${e.volume_behavior ?? "?"}, tags=${e.tags.join("|")}`);
+          const lastClose = (cs: any[], step: number, n: number) => {
+            const out: number[] = [];
+            for (let i = cs.length - 1; i >= 0 && out.length < n; i -= step) out.unshift(Number(cs[i].c.toFixed(2)));
+            return out;
+          };
+          const bc = benchmark.map((c: any) => c.c);
+          const nRet = bc.length > 30 ? ((bc[bc.length - 1] - bc[bc.length - 31]) / bc[bc.length - 31]) * 100 : 0;
+          deliberation = await deliberate({
+            candidates: shortlist.map(({ x, s, sector }) => ({
+              symbol: x.u.symbol, name: x.u.name, sector: x.u.sector, ltp: x.q.ltp, change_pct: x.q.changePct,
+              scores: { monthly: s.monthly, weekly: s.weekly, sector, history: s.history, fundamental: s.fundamental, rs: s.rs, volume: s.volume, swing: s.swing },
+              reasons: s.reasoning as any, tags: x.tags,
+              breakout: x.breakout, sector_score: sector,
+              monthly_closes: lastClose(x.q.candles, 21, 12),
+              weekly_closes: lastClose(x.q.candles, 5, 26),
+            })),
+            rules,
+            trainingSummary: ex.length ? ex.join("\n") : "(no training examples yet)",
+            journalLessons: lessonRules.length ? lessonRules.map((r) => "- " + r).join("\n") : "(no lessons yet)",
+            macroContext: `Nifty 50 macro score ${macro}/100, Nifty 30-day return ${nRet.toFixed(1)}%. Sector scores: ${JSON.stringify(sectorScore)}`,
+            maxPicks: 5,
+          });
+          approvedMap = new Map(deliberation.approved.map((d: any) => [d.symbol, d]));
+        } catch (e: any) {
+          console.error("[deliberation]", e);
+          deliberation = { error: String(e?.message ?? e), status: e?.status ?? 500 };
+        }
+      }
+
+      const aiOk = deliberation && !deliberation.error;
+      const chosen = aiOk
+        ? shortlist.filter(({ x }) => approvedMap.has(x.u.symbol)).map(({ x, s }) => ({ x, s }))
+        : candidates.filter(({ x }) => !activeSet.has(x.u.symbol)).map(({ x, s }) => ({ x, s }));
+
+      const newPicks = chosen.map(({ x, s }) => {
+        const d = approvedMap.get(x.u.symbol);
+        const agentNotes: Record<string, string> = {};
+        if (aiOk) {
+          for (const [id, sp] of Object.entries<any>(deliberation.specialists)) {
+            const o = sp.opinions?.find((o: any) => o.symbol === x.u.symbol);
+            if (o) agentNotes[`ai_${id}`] = `${o.verdict} (${Math.round(o.score)}): ${o.reasoning}`;
+          }
+        }
+        return {
           symbol: x.u.symbol, name: x.u.name, sector: x.u.sector,
           ltp: x.q.ltp,
-          // Entry = breakout line (price will revisit this on a retest)
           entry_price: Number(x.breakout.breakout_price.toFixed(2)),
-          swing_score: s.swing, monthly_score: s.monthly, weekly_score: s.weekly,
+          swing_score: d ? d.conviction : s.swing,
+          monthly_score: s.monthly, weekly_score: s.weekly,
           history_score: s.history, volume_score: s.volume, rs_score: s.rs,
           tags: x.tags,
           reasoning: {
             ...s.reasoning,
+            ...agentNotes,
+            ...(d ? { master: `Conviction ${d.conviction}: ${d.thesis}`, key_risk: d.key_risk, stop_loss: `₹${Number(d.stop_loss).toFixed(2)}`, decided_by: "ai_agents" } : { decided_by: "quant_fallback" }),
             breakout: `Broke out ${x.breakout.bars_since}d ago from ₹${x.breakout.breakout_price.toFixed(2)}; now ${x.breakout.pct_above >= 0 ? "+" : ""}${x.breakout.pct_above.toFixed(1)}% above.`,
           },
           status: "active",
-        }));
+        };
+      });
       if (newPicks.length) await supabaseAdmin.from("recommendations").insert(newPicks);
+
+      // Persist the full debate so the Agents page shows what each AI actually said.
+      await supabaseAdmin.from("price_cache").upsert({
+        symbol: "__DELIBERATION__",
+        payload: {
+          run_id: run.id, at: new Date().toISOString(),
+          shortlist: shortlist.map(({ x }) => x.u.symbol),
+          scanned: results.length,
+          ...(deliberation ?? { skipped: "no breakout candidates in the entry window" }),
+          picked: newPicks.map((p) => p.symbol),
+        },
+        updated_at: new Date().toISOString(),
+      });
 
       await supabaseAdmin.from("agent_runs").update({
         finished_at: new Date().toISOString(), status: "success",
