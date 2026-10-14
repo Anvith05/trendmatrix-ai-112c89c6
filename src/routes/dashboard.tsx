@@ -75,8 +75,8 @@ function Dashboard() {
           </div>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-4">
         <MacroRegimeCard />
+        <div className="grid gap-3 md:grid-cols-4">
           {([
             { cat: "bullish_monthly" as Cat,      icon: TrendingUp, label: "Bullish Monthly Trends", val: bullishMonthly, sub: `monthly score \u2265 65 \u00b7 of ${data.rankings.length} scanned` },
             { cat: "weekly_consolidation" as Cat, icon: Layers,     label: "Weekly Consolidations", val: tightWeekly,     sub: "weekly score \u2265 70 (tight base)" },
