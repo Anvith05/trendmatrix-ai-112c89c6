@@ -4,38 +4,22 @@ import { useServerFn } from "@tanstack/react-start";
 import { SiteNav } from "@/components/SiteNav";
 import { PinPrompt, useChatPinUnlocked } from "@/components/PinGate";
 import { agents } from "@/lib/mockData";
-import { getAgentChat, sendAgentChat, backtestWeekly } from "@/lib/market.functions";
+import { getAgentChat, sendAgentChat, backtestWeekly, getLatestDeliberation } from "@/lib/market.functions";
 import { ChevronRight, Cpu, CheckCircle2, XCircle, MessageSquare, Send, Loader2, Sparkles } from "lucide-react";
 
 export const Route = createFileRoute("/agents")({ component: AgentsPage,
   head: () => ({ meta: [{ title: "AI Agent Flow · TrendMatrix AI" }] }),
 });
 
-const reasonings: Record<string, { accepted: string[]; rejected: string[]; reasoning: string }> = {
-  data: {
-    accepted: ["NSE feed locked", "BSE feed locked", "Yahoo backup ready"],
-    rejected: ["EOD-only sources skipped"],
-    reasoning: "Streaming OHLCV (1m, weekly, monthly) + delivery % across 2,147 NSE/BSE listings.",
-  },
-  monthly: {
-    accepted: ["HAL +94", "BEL +91", "RVNL +89", "TITAGARH +88"],
-    rejected: ["TCS — broken structure", "INFY — lower highs"],
-    reasoning: "Higher highs + higher lows over 24+ monthly candles. Macro trend > 200WMA confirmed.",
-  },
-  weekly: {
-    accepted: ["BDL — 11w base", "MAZDOCK — VCP", "BEL — cup & handle"],
-    rejected: ["RELIANCE — too extended"],
-    reasoning: "Volatility contraction, volume dry-up, ATR collapse. Tight closes near range high.",
-  },
-  sector: {
-    accepted: ["Defence 94 sync", "Railways 90", "PSU 86"],
-    rejected: ["IT 40 — diverging", "FMCG 50 — neutral"],
-    reasoning: "≥40% of sector members basing on weekly while monthly remains bullish → rally priming.",
-  },
-  history: { accepted: ["Defence 2023 analog", "PSU 2022 analog"], rejected: ["No 2008-style match"], reasoning: "Vector similarity vs 10-yr Indian rally library + user-uploaded patterns." },
-  fundamental: { accepted: ["ROCE > 18%", "FII inflow positive"], rejected: ["High-debt names dropped"], reasoning: "Earnings momentum, promoter holding, cash flow quality." },
-  macro: { accepted: ["Defence capex +18%", "Railways budget +24%"], rejected: ["No adverse RBI signal"], reasoning: "Adjusts conviction only — never overrides technicals." },
-  master: { accepted: ["12 high-conviction setups"], rejected: ["Borderline candidates parked in watchlist"], reasoning: "Weighted ensemble: monthly·0.30 + weekly·0.25 + sectorSync·0.20 + similarity·0.15 + RS/Vol·0.10." },
+const ROLE: Record<string, string> = {
+  data: "Pulls live daily OHLCV for every NSE/BSE stock and sector ETF from Yahoo Finance, then builds a breakout shortlist.",
+  sector: "AI agent: judges whether the stock's sector is genuinely leading.",
+  monthly: "AI agent: judges strength and maturity of the monthly uptrend.",
+  weekly: "AI agent: judges base quality and whether the breakout is clean.",
+  history: "AI agent: compares the setup with your training charts and journal lessons.",
+  fundamental: "AI agent: checks price-quality, liquidity and momentum health.",
+  macro: "AI agent: checks whether the market regime supports new long entries.",
+  master: "AI agent: reads every specialist opinion and makes the final, accountable call (max 5).",
 };
 
 function AgentsPage() {
@@ -49,6 +33,26 @@ function AgentsPage() {
 
 
 function Agents() {
+  const fetchDelib = useServerFn(getLatestDeliberation);
+  const [d, setD] = useState<any>(null);
+  useEffect(() => { fetchDelib().then(setD).catch(() => {}); }, []);
+  const view = (id: string) => {
+    if (!d) return { summary: "", accepted: [] as string[], rejected: [] as string[] };
+    if (id === "data") return {
+      summary: `Scanned ${d.scanned ?? "?"} instruments; ${d.shortlist?.length ?? 0} in the breakout entry window.`,
+      accepted: d.shortlist ?? [], rejected: [] as string[] };
+    if (id === "master") {
+      const ds = d.master?.decisions ?? [];
+      return { summary: d.master?.summary ?? d.error ?? d.skipped ?? "",
+        accepted: ds.filter((x: any) => x.approve).map((x: any) => `${x.symbol} ${x.conviction}: ${x.thesis}`),
+        rejected: ds.filter((x: any) => !x.approve).map((x: any) => `${x.symbol}: ${x.key_risk}`) };
+    }
+    const sp = d.specialists?.[id];
+    if (!sp) return { summary: d.error ? `Unavailable: ${d.error}` : d.skipped ?? "", accepted: [], rejected: [] };
+    return { summary: sp.error ? `Unavailable: ${sp.error}` : sp.summary,
+      accepted: sp.opinions.filter((o: any) => o.verdict === "bullish").map((o: any) => `${o.symbol} ${Math.round(o.score)}: ${o.reasoning}`),
+      rejected: sp.opinions.filter((o: any) => o.verdict !== "bullish").map((o: any) => `${o.symbol} (${o.verdict}): ${o.reasoning}`) };
+  };
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-8">
@@ -56,13 +60,13 @@ function Agents() {
           <div className="text-xs font-mono uppercase tracking-wider text-primary">Multi-Agent Workflow</div>
           <h1 className="mt-1 font-display text-3xl font-bold">8 specialized AI agents · sequential conviction pipeline</h1>
           <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-            Each agent inspects the output of the previous one. Stocks must survive every stage to reach Master AI ranking.
+            Live data builds a shortlist; six specialist AI agents debate it independently, and the Master AI makes the final call. Below is what each agent actually said on the latest scan.
           </p>
         </div>
 
         <div className="space-y-3">
           {agents.map((a, i) => {
-            const r = reasonings[a.id];
+            const r = view(a.id);
             return (
               <div key={a.id} className="relative rounded-xl glass p-5">
                 <div className="flex flex-wrap items-start gap-4">
@@ -75,14 +79,17 @@ function Agents() {
                       <h3 className="text-lg font-semibold">{a.name}</h3>
                       <span className="rounded-full border border-success/40 bg-success/10 px-2 py-0.5 text-[10px] font-mono uppercase text-success">{a.status}</span>
                     </div>
-                    <p className="mt-2 text-sm text-muted-foreground">{r?.reasoning}</p>
+                    <p className="mt-2 text-sm text-muted-foreground">{ROLE[a.id]}</p>
+                    {r.summary && <p className="mt-1 text-sm">{r.summary}</p>}
+                    {d?.at && <div className="mt-1 text-[10px] font-mono text-muted-foreground">Last debate {new Date(d.at).toLocaleString()}</div>}
                     <div className="mt-3 grid gap-3 md:grid-cols-2">
                       <div>
                         <div className="mb-1 flex items-center gap-1 text-[11px] font-mono uppercase text-success">
                           <CheckCircle2 className="h-3 w-3" /> Accepted
                         </div>
                         <div className="flex flex-wrap gap-1.5">
-                          {r?.accepted.map((x) => (
+                          {r.accepted.length === 0 && <span className="text-xs text-muted-foreground">—</span>}
+                          {r.accepted.map((x) => (
                             <span key={x} className="rounded-md border border-success/30 bg-success/5 px-2 py-0.5 text-xs">{x}</span>
                           ))}
                         </div>
@@ -92,16 +99,13 @@ function Agents() {
                           <XCircle className="h-3 w-3" /> Rejected
                         </div>
                         <div className="flex flex-wrap gap-1.5">
-                          {r?.rejected.map((x) => (
+                          {r.rejected.length === 0 && <span className="text-xs text-muted-foreground">—</span>}
+                          {r.rejected.map((x) => (
                             <span key={x} className="rounded-md border border-destructive/30 bg-destructive/5 px-2 py-0.5 text-xs">{x}</span>
                           ))}
                         </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="text-right font-mono text-xs text-muted-foreground">
-                    <div>in <span className="text-foreground">{a.processed}</span></div>
-                    <div>out <span className="text-primary">{a.accepted}</span></div>
                   </div>
                 </div>
                 {i < agents.length - 1 && (
