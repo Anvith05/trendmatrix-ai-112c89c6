@@ -11,7 +11,7 @@ export class AgentGatewayError extends Error {
 }
 
 // Streams a Responses call and returns the parsed JSON object.
-async function callAgentJSON<T>(system: string, user: string, schema: Record<string, unknown>, name: string): Promise<T> {
+export async function callAgentJSON<T>(system: string, user: string, schema: Record<string, unknown>, name: string): Promise<T> {
   const key = process.env.LOVABLE_API_KEY;
   if (!key) throw new AgentGatewayError(401, "LOVABLE_API_KEY missing");
   const res = await fetch(GATEWAY, {
