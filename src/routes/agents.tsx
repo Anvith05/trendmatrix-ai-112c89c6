@@ -89,7 +89,7 @@ function Agents() {
                         </div>
                         <div className="flex flex-wrap gap-1.5">
                           {r.accepted.length === 0 && <span className="text-xs text-muted-foreground">—</span>}
-                          {r.accepted.map((x) => (
+                          {r.accepted.map((x: string) => (
                             <span key={x} className="rounded-md border border-success/30 bg-success/5 px-2 py-0.5 text-xs">{x}</span>
                           ))}
                         </div>
@@ -100,7 +100,7 @@ function Agents() {
                         </div>
                         <div className="flex flex-wrap gap-1.5">
                           {r.rejected.length === 0 && <span className="text-xs text-muted-foreground">—</span>}
-                          {r.rejected.map((x) => (
+                          {r.rejected.map((x: string) => (
                             <span key={x} className="rounded-md border border-destructive/30 bg-destructive/5 px-2 py-0.5 text-xs">{x}</span>
                           ))}
                         </div>
