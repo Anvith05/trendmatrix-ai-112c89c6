@@ -77,7 +77,7 @@ function Agents() {
                     <div className="flex flex-wrap items-center gap-3">
                       <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Agent {i + 1}</div>
                       <h3 className="text-lg font-semibold">{a.name}</h3>
-                      <span className="rounded-full border border-success/40 bg-success/10 px-2 py-0.5 text-[10px] font-mono uppercase text-success">{a.status}</span>
+                      <span className="rounded-full border border-success/40 bg-success/10 px-2 py-0.5 text-[10px] font-mono uppercase text-success">{d && !d.error ? "live AI" : "idle"}</span>
                     </div>
                     <p className="mt-2 text-sm text-muted-foreground">{ROLE[a.id]}</p>
                     {r.summary && <p className="mt-1 text-sm">{r.summary}</p>}
