@@ -1468,3 +1468,10 @@ export const analyzeOutcomes = createServerFn({ method: "POST" }).handler(async 
 
   return { ...out, stats };
 });
+
+// Latest real AI-agent debate (what each LLM agent actually said on the last scan).
+export const getLatestDeliberation = createServerFn({ method: "GET" }).handler(async () => {
+  const { data } = await supabaseAdmin.from("price_cache").select("payload, updated_at")
+    .eq("symbol", "__DELIBERATION__").maybeSingle();
+  return (data?.payload as any) ?? null;
+});
