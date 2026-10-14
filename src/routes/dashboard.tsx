@@ -6,6 +6,7 @@ import { Ticker } from "@/components/Ticker";
 import { getCategoryStocks, getLatestRankings, runAgents } from "@/lib/market.functions";
 import { agents, sectors } from "@/lib/mockData";
 import { Activity, TrendingUp, Layers, Radar, RefreshCw, Loader2, X, Eye } from "lucide-react";
+import { MacroRegimeCard } from "@/components/MacroRegimeCard";
 
 type Cat = "bullish_monthly" | "weekly_consolidation" | "synced_sector" | "high_conviction";
 
@@ -75,6 +76,7 @@ function Dashboard() {
         </div>
 
         <div className="grid gap-3 md:grid-cols-4">
+        <MacroRegimeCard />
           {([
             { cat: "bullish_monthly" as Cat,      icon: TrendingUp, label: "Bullish Monthly Trends", val: bullishMonthly, sub: `monthly score \u2265 65 \u00b7 of ${data.rankings.length} scanned` },
             { cat: "weekly_consolidation" as Cat, icon: Layers,     label: "Weekly Consolidations", val: tightWeekly,     sub: "weekly score \u2265 70 (tight base)" },
