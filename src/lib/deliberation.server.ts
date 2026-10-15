@@ -74,7 +74,7 @@ export type Candidate = {
 
 export type Opinion = { symbol: string; verdict: "bullish" | "neutral" | "bearish"; score: number; reasoning: string };
 export type MasterDecision = {
-  symbol: string; approve: boolean; conviction: number; stop_loss: number; thesis: string; key_risk: string;
+  symbol: string; approve: boolean; conviction: number; stop_loss: number; thesis: string; key_risk: string; aim_target_pct: number;
 };
 
 const opinionSchema = {
@@ -105,7 +105,7 @@ const masterSchema = {
       type: "array",
       items: {
         type: "object", additionalProperties: false,
-        required: ["symbol", "approve", "conviction", "stop_loss", "thesis", "key_risk"],
+        required: ["symbol", "approve", "conviction", "stop_loss", "thesis", "key_risk", "aim_target_pct"],
         properties: {
           symbol: { type: "string" },
           approve: { type: "boolean" },
@@ -113,6 +113,7 @@ const masterSchema = {
           stop_loss: { type: "number" },
           thesis: { type: "string" },
           key_risk: { type: "string" },
+          aim_target_pct: { type: "number" },
         },
       },
     },
@@ -147,7 +148,7 @@ const SPECIALISTS: SpecialistDef[] = [
     pick: (c) => ({ fundamental_score: c.scores.fundamental, detail: c.reasons.fundamental, ltp: c.ltp, change_pct: c.change_pct }),
   },
   {
-    id: "macro", role: "Macro agent: given the Nifty regime and recent market headlines, say whether the environment supports new long swing entries in this stock's sector.",
+    id: "macro", role: "Macro agent: given the Nifty regime plus the global Macro Sentinel report (US 10Y, US 2Y/10Y yield curve, copper, crude, S&P 500, dollar, VIX), say whether the environment supports new long swing entries in this stock's sector.",
     pick: (c) => ({ sector: c.sector }),
   },
 ];
@@ -203,7 +204,7 @@ JOURNAL LESSONS (learn from losers, repeat what made winners):\n${input.journalL
 SPECIALIST SUMMARIES:\n${Object.entries(specialists).map(([id, s]) => `${id}: ${s.error ? "unavailable" : s.summary}`).join("\n")}
 DEBATE BOARD:\n${JSON.stringify(board)}
 
-Reconcile disagreements between agents. Approve AT MOST ${input.maxPicks} candidates, and only genuinely high-quality setups — it is fine to approve zero. For every candidate return a decision. stop_loss must be a price below the breakout line (typically just under the base). conviction 0-100.`;
+Reconcile disagreements between agents. Approve AT MOST ${input.maxPicks} candidates, and only genuinely high-quality setups — it is fine to approve zero. For every candidate return a decision. stop_loss must be a price below the breakout line (typically just under the base). conviction 0-100. aim_target_pct = the realistic maximum % gain you expect from entry within ~3 months (base target is 10%; can be lower or higher, e.g. 15-30% for strong leaders), adjusted for the global macro risk.`;
 
   const master = await callAgentJSON<{ summary: string; decisions: MasterDecision[] }>(
     `${BASE}\n\nYou are the Master Conviction agent (lead portfolio manager). You read every specialist's opinion and make the final, accountable decision.`,

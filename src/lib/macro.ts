@@ -5,7 +5,7 @@ export type MacroIndicator = {
 export type Regime = "risk_on" | "caution" | "crash_watch";
 
 /** Risk score 0-100 (higher = more danger) from transparent rules. */
-export function computeRiskScore(ind: Record<string, MacroIndicator | undefined>): { score: number; flags: string[] } {
+export function computeRiskScore(ind: Record<string, MacroIndicator | undefined>, yieldCurve: number | null = null): { score: number; flags: string[] } {
   let s = 30; const flags: string[] = [];
   const vix = ind.vix?.value;
   if (vix != null) {
@@ -25,6 +25,9 @@ export function computeRiskScore(ind: Record<string, MacroIndicator | undefined>
   if (us10 != null && us10 >= 8) { s += 5; flags.push("US 10Y yields rising fast"); }
   const spx = ind.spx?.chg1m;
   if (spx != null && spx <= -6) { s += 10; flags.push(`S&P 500 ${spx.toFixed(1)}% in a month — global risk-off`); }
+  if (yieldCurve != null && yieldCurve < 0) { s += 8; flags.push(`US yield curve inverted (${yieldCurve.toFixed(2)}) — recession warning`); }
+  const cu = ind.copper?.chg1m;
+  if (cu != null && cu <= -8) { s += 6; flags.push(`Copper ${cu.toFixed(1)}% in a month — industrial slowdown signal`); }
   return { score: Math.max(0, Math.min(100, Math.round(s))), flags };
 }
 

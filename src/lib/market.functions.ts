@@ -359,6 +359,12 @@ export const runAgents = createServerFn({ method: "POST" })
           };
           const bc = benchmark.map((c: any) => c.c);
           const nRet = bc.length > 30 ? ((bc[bc.length - 1] - bc[bc.length - 31]) / bc[bc.length - 31]) * 100 : 0;
+          let sentinel = "(macro sentinel unavailable)";
+          try {
+            const { data: mc } = await supabaseAdmin.from("price_cache").select("payload").eq("symbol", "__MACRO_REGIME__").maybeSingle();
+            const r: any = mc?.payload;
+            if (r) sentinel = `Global risk ${r.risk_score}/100 (${r.regime}). Flags: ${(r.flags ?? []).join("; ") || "none"}. ` + (r.indicators ?? []).map((i: any) => `${i.label} ${i.value?.toFixed?.(2) ?? "n/a"} (1m ${i.chg1m?.toFixed?.(1) ?? "n/a"}%)`).join(", ") + (r.yield_curve != null ? `. US 10Y-2Y spread ${r.yield_curve.toFixed(2)}` : "");
+          } catch {}
           deliberation = await deliberate({
             candidates: shortlist.map(({ x, s, sector }) => ({
               symbol: x.u.symbol, name: x.u.name, sector: x.u.sector, ltp: x.q.ltp, change_pct: x.q.changePct,
@@ -371,7 +377,7 @@ export const runAgents = createServerFn({ method: "POST" })
             rules,
             trainingSummary: ex.length ? ex.join("\n") : "(no training examples yet)",
             journalLessons: lessonRules.length ? lessonRules.map((r) => "- " + r).join("\n") : "(no lessons yet)",
-            macroContext: `Nifty 50 macro score ${macro}/100, Nifty 30-day return ${nRet.toFixed(1)}%. Sector scores: ${JSON.stringify(sectorScore)}`,
+            macroContext: `Nifty 50 macro score ${macro}/100, Nifty 30-day return ${nRet.toFixed(1)}%. Sector scores: ${JSON.stringify(sectorScore)}\nGLOBAL MACRO SENTINEL: ${sentinel}`,
             maxPicks: 5,
           });
           approvedMap = new Map(deliberation.approved.map((d: any) => [d.symbol, d]));
@@ -406,7 +412,7 @@ export const runAgents = createServerFn({ method: "POST" })
           reasoning: {
             ...s.reasoning,
             ...agentNotes,
-            ...(d ? { master: `Conviction ${d.conviction}: ${d.thesis}`, key_risk: d.key_risk, stop_loss: `₹${Number(d.stop_loss).toFixed(2)}`, decided_by: "ai_agents" } : { decided_by: "quant_fallback" }),
+            ...(d ? { master: `Conviction ${d.conviction}: ${d.thesis}`, key_risk: d.key_risk, stop_loss: `₹${Number(d.stop_loss).toFixed(2)}`, aim_target_pct: Math.round(Number(d.aim_target_pct) || 10), decided_by: "ai_agents" } : { decided_by: "quant_fallback" }),
             breakout: `Broke out ${x.breakout.bars_since}d ago from ₹${x.breakout.breakout_price.toFixed(2)}; now ${x.breakout.pct_above >= 0 ? "+" : ""}${x.breakout.pct_above.toFixed(1)}% above.`,
           },
           status: "active",
