@@ -37,7 +37,7 @@ function MacroPage() {
           <h2 className="font-display text-lg font-semibold">Crash Shopping Watchlist</h2>
           <p className="mb-3 text-xs text-muted-foreground">
             {armed ? "Radar is Defensive/Crash — deploy cash in tranches (e.g. 1/3 now, 1/3 at -5% more, 1/3 on reversal)." : "Radar is Risk-On — keep this list ready; deploy only when the radar turns Defensive or Crash."}
-            {" "}Drawdown is from the 1-year high.
+            {" "}Live top 4: stocks that fell least on Nifty fall days and bounced hardest after. Drawdown is from the 1-year high.
           </p>
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
             {(items ?? []).map((w) => (
