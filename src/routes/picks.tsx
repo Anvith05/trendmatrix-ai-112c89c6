@@ -5,6 +5,7 @@ import { SiteNav } from "@/components/SiteNav";
 import { Ticker } from "@/components/Ticker";
 import { getLatestRankings, getQuote, getRecommendations, markPickRead, removePick, runAgents } from "@/lib/market.functions";
 import { supabase } from "@/integrations/supabase/client";
+import { getUndervaluedRebounds, type ValuePick } from "@/lib/macro.functions";
 import { Sparkles, TrendingUp, Loader2, RefreshCw, ArrowRight, Trash2, Upload, X, BookOpenCheck } from "lucide-react";
 
 
@@ -117,8 +118,33 @@ function Picks() {
           )}
         </section>
 
+        <ValueSection />
       </div>
     </div>
+  );
+}
+
+function ValueSection() {
+  const fn = useServerFn(getUndervaluedRebounds);
+  const [items, setItems] = useState<ValuePick[] | null>(null);
+  useEffect(() => { fn().then(setItems).catch(() => setItems([])); }, []);
+  return (
+    <section className="mb-10">
+      <h2 className="font-display text-lg font-semibold">Undervalued Rebounds</h2>
+      <p className="mb-3 text-xs text-muted-foreground">Liquid stocks 18–55% below their 1-year high that are gaining momentum again. Separate from Top Picks and not added to the Journal. Updates every 30 min.</p>
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+        {!items && <div className="h-24 animate-pulse rounded-xl glass" />}
+        {items?.length === 0 && <div className="text-sm text-muted-foreground">No stocks match right now.</div>}
+        {items?.map((v) => (
+          <div key={v.symbol} className="rounded-xl glass p-4">
+            <div className="flex justify-between"><span className="font-mono font-bold">{v.symbol}</span><span className="font-mono text-2xl font-bold text-gradient">{v.score}</span></div>
+            <div className="text-xs text-muted-foreground">{v.name} · {v.sector}</div>
+            <div className="mt-2 font-mono text-lg">₹{v.ltp.toFixed(2)}</div>
+            <div className="mt-1 text-xs">{v.why}</div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
