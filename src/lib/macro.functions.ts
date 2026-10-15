@@ -66,3 +66,32 @@ export const getMacroRegime = createServerFn({ method: "POST" })
     await supabaseAdmin.from("price_cache").upsert({ symbol: CACHE_KEY, payload: report as any, updated_at: report.updated_at });
     return report;
   });
+
+const WATCH: { y: string; name: string; why: string }[] = [
+  { y: "HDFCBANK.NS", name: "HDFC Bank", why: "Quality private bank — sells off with FII exits, recovers first" },
+  { y: "ICICIBANK.NS", name: "ICICI Bank", why: "Best-in-class bank franchise" },
+  { y: "RELIANCE.NS", name: "Reliance", why: "Index heavyweight, diversified cash flows" },
+  { y: "TCS.NS", name: "TCS", why: "Debt-free IT leader, gains when rupee weakens" },
+  { y: "INFY.NS", name: "Infosys", why: "IT exporter, rupee-hedge" },
+  { y: "LT.NS", name: "Larsen & Toubro", why: "Capex leader, sharp rebounds after panics" },
+  { y: "BAJFINANCE.NS", name: "Bajaj Finance", why: "High beta quality — biggest bounces" },
+  { y: "TITAN.NS", name: "Titan", why: "Consumption compounder" },
+  { y: "SUNPHARMA.NS", name: "Sun Pharma", why: "Defensive pharma leader" },
+  { y: "NIFTYBEES.NS", name: "Nifty BeES", why: "Buy the whole index at fear" },
+  { y: "GOLDBEES.NS", name: "Gold BeES", why: "Hedge — rises in global panic" },
+];
+
+export type WatchItem = { symbol: string; name: string; why: string; ltp: number | null; drawdown: number | null; zone: "deep_value" | "buy_zone" | "wait" | "n/a" };
+
+export const getCrashWatchlist = createServerFn({ method: "POST" }).handler(async (): Promise<WatchItem[]> => {
+  const { fetchYahooChart } = await import("./yahoo.server");
+  return Promise.all(WATCH.map(async (w) => {
+    const q = await fetchYahooChart(w.y, "1y", "1d").catch(() => null);
+    const sym = w.y.replace(".NS", "");
+    if (!q || !q.candles.length) return { symbol: sym, name: w.name, why: w.why, ltp: null, drawdown: null, zone: "n/a" as const };
+    const ltp = q.candles[q.candles.length - 1].c;
+    const hi = Math.max(...q.candles.map((c) => c.h));
+    const dd = ((ltp - hi) / hi) * 100;
+    return { symbol: sym, name: w.name, why: w.why, ltp, drawdown: dd, zone: dd <= -25 ? "deep_value" : dd <= -12 ? "buy_zone" : "wait" };
+  }));
+});
