@@ -6,7 +6,6 @@ import { PinPrompt, useChatPinUnlocked } from "@/components/PinGate";
 import { agents } from "@/lib/mockData";
 import { getAgentChat, sendAgentChat, backtestWeekly, getLatestDeliberation } from "@/lib/market.functions";
 import { ChevronRight, Cpu, CheckCircle2, XCircle, MessageSquare, Send, Loader2, Sparkles } from "lucide-react";
-import { MacroRegimeCard } from "@/components/MacroRegimeCard";
 
 export const Route = createFileRoute("/agents")({ component: AgentsPage,
   head: () => ({ meta: [{ title: "AI Agent Flow · TrendMatrix AI" }] }),
@@ -57,7 +56,7 @@ function Agents() {
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-8">
-        <MacroRegimeCard full />
+        
         <div className="mb-6">
           <div className="text-xs font-mono uppercase tracking-wider text-primary">Multi-Agent Workflow</div>
           <h1 className="mt-1 font-display text-3xl font-bold">8 specialized AI agents · sequential conviction pipeline</h1>

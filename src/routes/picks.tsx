@@ -183,6 +183,11 @@ function PickCard({ r, onRemoved, onRead }: { r: Rec; onRemoved: () => void; onR
       <div className="mt-3 flex items-baseline gap-2">
         <span className="font-mono text-xl font-semibold">₹{Number(r.entry_price ?? 0).toFixed(2)}</span>
         <span className="flex items-center gap-1 text-xs text-success"><TrendingUp className="h-3 w-3" /> Entry</span>
+        {r.reasoning?.aim_target_pct != null && (
+          <span className="rounded-full border border-success/40 bg-success/10 px-2 py-0.5 text-[10px] font-mono text-success" title="AI's stretch target — test only, not used in Journal">
+            AI aim +{r.reasoning.aim_target_pct}%
+          </span>
+        )}
         <span className="ml-auto text-[10px] font-mono text-muted-foreground">{timeLeft(r.expires_at)}</span>
       </div>
 
@@ -200,6 +205,18 @@ function PickCard({ r, onRemoved, onRead }: { r: Rec; onRemoved: () => void; onR
           </div>
         ))}
       </div>
+
+      {["sector","monthly","weekly","history","fundamental","macro"].some((k) => r.reasoning?.[`ai_${k}`]) && (
+        <details className="mt-3 rounded-md border border-border bg-card/40 p-2 text-[11px]">
+          <summary className="cursor-pointer font-semibold text-primary">Agent opinions</summary>
+          <div className="mt-2 space-y-1.5">
+            {["sector","monthly","weekly","history","fundamental","macro"].map((k) => r.reasoning?.[`ai_${k}`] && (
+              <div key={k}><span className="font-mono uppercase text-muted-foreground">{k}:</span> {r.reasoning[`ai_${k}`]}</div>
+            ))}
+            {r.reasoning?.master && <div className="text-foreground"><span className="font-mono uppercase text-primary">master:</span> {r.reasoning.master}</div>}
+          </div>
+        </details>
+      )}
 
       {(r.tags ?? []).length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1">
