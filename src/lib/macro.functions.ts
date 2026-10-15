@@ -67,31 +67,63 @@ export const getMacroRegime = createServerFn({ method: "POST" })
     return report;
   });
 
-const WATCH: { y: string; name: string; why: string }[] = [
-  { y: "HDFCBANK.NS", name: "HDFC Bank", why: "Quality private bank — sells off with FII exits, recovers first" },
-  { y: "ICICIBANK.NS", name: "ICICI Bank", why: "Best-in-class bank franchise" },
-  { y: "RELIANCE.NS", name: "Reliance", why: "Index heavyweight, diversified cash flows" },
-  { y: "TCS.NS", name: "TCS", why: "Debt-free IT leader, gains when rupee weakens" },
-  { y: "INFY.NS", name: "Infosys", why: "IT exporter, rupee-hedge" },
-  { y: "LT.NS", name: "Larsen & Toubro", why: "Capex leader, sharp rebounds after panics" },
-  { y: "BAJFINANCE.NS", name: "Bajaj Finance", why: "High beta quality — biggest bounces" },
-  { y: "TITAN.NS", name: "Titan", why: "Consumption compounder" },
-  { y: "SUNPHARMA.NS", name: "Sun Pharma", why: "Defensive pharma leader" },
-  { y: "NIFTYBEES.NS", name: "Nifty BeES", why: "Buy the whole index at fear" },
-  { y: "GOLDBEES.NS", name: "Gold BeES", why: "Hedge — rises in global panic" },
-];
+// ---- Live universe scan (cached 30 min) shared by Crash Shopping + Undervalued Rebounds ----
+type ScanRow = { symbol: string; name: string; sector: string; ltp: number; hi: number; drawdown: number;
+  ret20: number; above20: boolean; above50: boolean; turnoverCr: number; fallDayAvg: number | null; reboundAvg: number | null; ret1y: number };
+
+const SCAN_KEY = "__UNIVERSE_SCAN__";
+async function scanUniverse(): Promise<ScanRow[]> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data: c } = await supabaseAdmin.from("price_cache").select("payload, updated_at").eq("symbol", SCAN_KEY).maybeSingle();
+  if (c && Date.now() - new Date(c.updated_at).getTime() < TTL_MS) return c.payload as unknown as ScanRow[];
+  const { fetchYahooChart } = await import("./yahoo.server");
+  const { data: uni } = await supabaseAdmin.from("stock_universe").select("symbol, yahoo_symbol, name, sector, kind").eq("active", true);
+  const nifty = await fetchYahooChart("^NSEI", "1y", "1d").catch(() => null);
+  const nRet = new Map<number, number>();
+  (nifty?.candles ?? []).forEach((k, i, a) => { if (i) nRet.set(Math.floor(k.t / 86400), (k.c - a[i - 1].c) / a[i - 1].c * 100); });
+  const rows: ScanRow[] = [];
+  await Promise.all((uni ?? []).filter((u) => u.kind === "stock").map(async (u) => {
+    const q = await fetchYahooChart(u.yahoo_symbol, "1y", "1d").catch(() => null);
+    const k = q?.candles ?? []; if (k.length < 120) return;
+    const cl = k.map((x) => x.c); const ltp = cl[cl.length - 1];
+    const hi = Math.max(...k.map((x) => x.h));
+    const sma = (n: number) => cl.slice(-n).reduce((a, b) => a + b, 0) / n;
+    const turnover = k.slice(-20).reduce((a, x) => a + x.c * ((x as any).v ?? 0), 0) / 20 / 1e7;
+    const fall: number[] = [], reb: number[] = [];
+    k.forEach((x, i) => { if (!i) return; const nr = nRet.get(Math.floor(x.t / 86400)); if (nr == null) return;
+      const r = (x.c - k[i - 1].c) / k[i - 1].c * 100;
+      if (nr <= -1) fall.push(r - nr); // outperformance vs Nifty on fall days
+      if (nr >= 1) reb.push(r - nr); });
+    const avg = (a: number[]) => a.length >= 3 ? a.reduce((s, v) => s + v, 0) / a.length : null;
+    rows.push({ symbol: u.symbol, name: u.name, sector: u.sector, ltp, hi, drawdown: (ltp - hi) / hi * 100,
+      ret20: (ltp - cl[cl.length - 21]) / cl[cl.length - 21] * 100, above20: ltp > sma(20), above50: ltp > sma(50),
+      turnoverCr: turnover, fallDayAvg: avg(fall), reboundAvg: avg(reb), ret1y: (ltp - cl[0]) / cl[0] * 100 });
+  }));
+  await supabaseAdmin.from("price_cache").upsert({ symbol: SCAN_KEY, payload: rows as any, updated_at: new Date().toISOString() });
+  return rows;
+}
 
 export type WatchItem = { symbol: string; name: string; why: string; ltp: number | null; drawdown: number | null; zone: "deep_value" | "buy_zone" | "wait" | "n/a" };
 
+/** Live: top 4 liquid stocks that hold up best on Nifty fall days and bounce hardest on up days. */
 export const getCrashWatchlist = createServerFn({ method: "POST" }).handler(async (): Promise<WatchItem[]> => {
-  const { fetchYahooChart } = await import("./yahoo.server");
-  return Promise.all(WATCH.map(async (w) => {
-    const q = await fetchYahooChart(w.y, "1y", "1d").catch(() => null);
-    const sym = w.y.replace(".NS", "");
-    if (!q || !q.candles.length) return { symbol: sym, name: w.name, why: w.why, ltp: null, drawdown: null, zone: "n/a" as const };
-    const ltp = q.candles[q.candles.length - 1].c;
-    const hi = Math.max(...q.candles.map((c) => c.h));
-    const dd = ((ltp - hi) / hi) * 100;
-    return { symbol: sym, name: w.name, why: w.why, ltp, drawdown: dd, zone: dd <= -25 ? "deep_value" : dd <= -12 ? "buy_zone" : "wait" };
-  }));
+  const rows = (await scanUniverse()).filter((r) => r.fallDayAvg != null && r.reboundAvg != null && r.turnoverCr >= 10);
+  return rows.map((r) => ({ r, s: r.fallDayAvg! * 1.5 + r.reboundAvg! + (r.above50 ? 0.3 : 0) }))
+    .sort((a, b) => b.s - a.s).slice(0, 4).map(({ r }) => ({
+      symbol: r.symbol, name: r.name, ltp: r.ltp, drawdown: r.drawdown,
+      why: `${r.sector} · beats Nifty by ${r.fallDayAvg!.toFixed(2)}%/day on fall days, ${r.reboundAvg! >= 0 ? "+" : ""}${r.reboundAvg!.toFixed(2)}% on rebound days`,
+      zone: r.drawdown <= -25 ? "deep_value" : r.drawdown <= -12 ? "buy_zone" : "wait",
+    }));
+});
+
+export type ValuePick = { symbol: string; name: string; sector: string; ltp: number; drawdown: number; ret20: number; turnoverCr: number; score: number; why: string };
+
+/** Live: quality liquid stocks 18-55% off their 1y high that are regaining momentum. Independent of Top Picks/Journal. */
+export const getUndervaluedRebounds = createServerFn({ method: "POST" }).handler(async (): Promise<ValuePick[]> => {
+  const rows = (await scanUniverse()).filter((r) => r.drawdown <= -18 && r.drawdown >= -55 && r.above20 && r.ret20 > 0 && r.turnoverCr >= 10);
+  return rows.map((r) => {
+    const score = Math.round(Math.min(100, Math.abs(r.drawdown) * 1.2 + Math.min(r.ret20, 15) * 2 + (r.above50 ? 15 : 0) + Math.min(r.turnoverCr / 10, 10)));
+    return { symbol: r.symbol, name: r.name, sector: r.sector, ltp: r.ltp, drawdown: r.drawdown, ret20: r.ret20, turnoverCr: r.turnoverCr, score,
+      why: `${Math.abs(r.drawdown).toFixed(0)}% below 1y high, +${r.ret20.toFixed(1)}% in 20 days${r.above50 ? ", back above 50-day avg" : ""}. Upside to old high: +${((r.hi / r.ltp - 1) * 100).toFixed(0)}%` };
+  }).sort((a, b) => b.score - a.score).slice(0, 5);
 });
