@@ -144,7 +144,7 @@ const SPECIALISTS: SpecialistDef[] = [
     pick: (c) => ({ tags: c.tags, pattern_match_score: c.scores.history }),
   },
   {
-    id: "fundamental", role: "Quality agent: judge the real company financials (profit/revenue growth, ROE, debt/equity, P/E from annual reports) plus price-quality and liquidity. Flag illiquid or overbought names.",
+    id: "fundamental", role: "Quality agent: judge the real company financials (profit/revenue growth, ROE, debt/equity, P/E from annual reports) plus price-quality and liquidity. Flag illiquid or overbought names. Be bearish on loss-making, heavily indebted or weak-quality companies — we never take risky trades because losing positions are held until they recover.",
     pick: (c) => ({ fundamental_score: c.scores.fundamental, detail: c.reasons.fundamental, ltp: c.ltp, change_pct: c.change_pct }),
   },
   {
