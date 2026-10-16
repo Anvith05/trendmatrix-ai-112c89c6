@@ -144,7 +144,7 @@ const SPECIALISTS: SpecialistDef[] = [
     pick: (c) => ({ tags: c.tags, pattern_match_score: c.scores.history }),
   },
   {
-    id: "fundamental", role: "Quality agent: judge price-quality, liquidity and momentum health (52w-high proximity, RSI, traded value). Flag illiquid or overbought names.",
+    id: "fundamental", role: "Quality agent: judge the real company financials (profit/revenue growth, ROE, debt/equity, P/E from annual reports) plus price-quality and liquidity. Flag illiquid or overbought names.",
     pick: (c) => ({ fundamental_score: c.scores.fundamental, detail: c.reasons.fundamental, ltp: c.ltp, change_pct: c.change_pct }),
   },
   {

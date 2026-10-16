@@ -108,7 +108,7 @@ function Section({ title, icon, entries, onChanged }: { title: string; icon: Rea
               <th className="px-3 py-2">Kind</th>
               <th className="px-3 py-2">Suggested</th>
               <th className="px-3 py-2">Entry</th>
-              <th className="px-3 py-2">Target (+10%)</th>
+              <th className="px-3 py-2">Target</th>
               <th className="px-3 py-2">Current</th>
               <th className="px-3 py-2">P/L</th>
               <th className="px-3 py-2">Status</th>
@@ -257,7 +257,7 @@ function Journal() {
             <div className="text-xs font-mono uppercase tracking-wider text-primary">Auto-logged AI Track Record</div>
             <h1 className="mt-1 font-display text-3xl font-bold">Trade Journal</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Every recommendation is auto-saved here. Target = +10% within 3 months. Trades that reach +10% show under “TP hit”; running trades in profit show under Winners, running trades in loss under Losers.
+              Every recommendation is auto-saved here. Trades are never cut in loss — they run until the target is hit. Target starts at +10% and rises +5% every 90 days the trade keeps running. Trades that reach +10% show under “TP hit”; running trades in profit show under Winners, running trades in loss under Losers.
             </p>
           </div>
           <button onClick={refreshOutcomes} disabled={busy}
