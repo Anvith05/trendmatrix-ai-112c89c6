@@ -365,6 +365,11 @@ export const runAgents = createServerFn({ method: "POST" })
             const r: any = mc?.payload;
             if (r) sentinel = `Global risk ${r.risk_score}/100 (${r.regime}). Flags: ${(r.flags ?? []).join("; ") || "none"}. ` + (r.indicators ?? []).map((i: any) => `${i.label} ${i.value?.toFixed?.(2) ?? "n/a"} (1m ${i.chg1m?.toFixed?.(1) ?? "n/a"}%)`).join(", ") + (r.yield_curve != null ? `. US 10Y-2Y spread ${r.yield_curve.toFixed(2)}` : "");
           } catch {}
+          const { getFundamentals } = await import("./fundamentals.server");
+          for (const it of shortlist) {
+            const f = await getFundamentals(it.x.u.symbol, it.x.u.yahoo_symbol).catch(() => null);
+            if (f) { (it.s.reasoning as any).fundamental = `REAL FINANCIALS (annual report ${f.asOf}): score ${f.score}/100 — ${f.reason}. Price-quality: ${(it.s.reasoning as any).fundamental}`; it.s.fundamental = Math.round((it.s.fundamental + f.score) / 2); }
+          }
           deliberation = await deliberate({
             candidates: shortlist.map(({ x, s, sector }) => ({
               symbol: x.u.symbol, name: x.u.name, sector: x.u.sector, ltp: x.q.ltp, change_pct: x.q.changePct,
@@ -957,8 +962,8 @@ export const updateJournalOutcomes = createServerFn({ method: "POST" }).handler(
         outcome: status === "winner" ? "target_hit" : "failed",
         archived_at: closed_at,
         removed_reason: status === "winner"
-          ? `Target +10% hit in ${Math.max(1, Math.round(ageMs / 86400000))} days`
-          : "No target after 3 months, closed in loss",
+          ? `Target +${((target / entry - 1) * 100).toFixed(0)}% hit in ${Math.max(1, Math.round(ageMs / 86400000))} days`
+          : "closed",
       }).eq("id", e.recommendation_id);
     }
   }
@@ -1156,7 +1161,7 @@ Rules of the strategy you are evaluating:
 - Setup = strong monthly trend + weekly consolidation + sector sync.
 - Target = +10% from entry within 3 months; hitting it closes the trade as "TP hit".
 - Running trades in profit are "winners in progress"; running trades in loss are "losers in progress".
-- A trade that is still negative after 90 days is closed as a loser.
+- Trades are never closed in loss; they run until the target is hit. Target starts at +10% and rises +5% for every 90 days the trade has been running.
 
 Behave like a real analyst: compute stats on request (win rate by sector, by score band, by kind, hold times, drawdowns), spot patterns in what worked and what failed, and give concrete, quantified recommendations for parameter changes. Use markdown, tables where useful, and keep it tight.
 
