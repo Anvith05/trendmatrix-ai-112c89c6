@@ -366,10 +366,14 @@ export const runAgents = createServerFn({ method: "POST" })
             if (r) sentinel = `Global risk ${r.risk_score}/100 (${r.regime}). Flags: ${(r.flags ?? []).join("; ") || "none"}. ` + (r.indicators ?? []).map((i: any) => `${i.label} ${i.value?.toFixed?.(2) ?? "n/a"} (1m ${i.chg1m?.toFixed?.(1) ?? "n/a"}%)`).join(", ") + (r.yield_curve != null ? `. US 10Y-2Y spread ${r.yield_curve.toFixed(2)}` : "");
           } catch {}
           const { getFundamentals } = await import("./fundamentals.server");
+          const risky = new Set<string>();
           for (const it of shortlist) {
             const f = await getFundamentals(it.x.u.symbol, it.x.u.yahoo_symbol).catch(() => null);
+            // Quality gate: never pick risky companies (loss-making, weak financials or heavy debt).
+            if (f && (!f.profitable || f.score < 50 || (f.debtToEquity != null && f.debtToEquity > 2))) { risky.add(it.x.u.symbol); continue; }
             if (f) { (it.s.reasoning as any).fundamental = `REAL FINANCIALS (annual report ${f.asOf}): score ${f.score}/100 — ${f.reason}. Price-quality: ${(it.s.reasoning as any).fundamental}`; it.s.fundamental = Math.round((it.s.fundamental + f.score) / 2); }
           }
+          for (let i = shortlist.length - 1; i >= 0; i--) if (risky.has(shortlist[i].x.u.symbol)) shortlist.splice(i, 1);
           deliberation = await deliberate({
             candidates: shortlist.map(({ x, s, sector }) => ({
               symbol: x.u.symbol, name: x.u.name, sector: x.u.sector, ltp: x.q.ltp, change_pct: x.q.changePct,
@@ -934,7 +938,20 @@ export const updateJournalOutcomes = createServerFn({ method: "POST" }).handler(
     // Target starts at +10% and rises +5% for every 90 days the trade runs,
     // so slow trades must earn more to compensate for the extra time.
     const DAY = 86400000;
-    const targetAt = (t: number) => entry * (1.10 + 0.05 * Math.floor(Math.max(0, t - suggestedMs) / (90 * DAY)));
+    // Per-stock realistic step: half the stock's own median 3-month upside over
+    // the past year (clamped 2-8%), and never above 5% beyond its 1-year high.
+    const cs = (q.candles ?? []).filter((c: any) => Number.isFinite(c.c) && Number.isFinite(c.h));
+    const moves: number[] = [];
+    for (let i = 0; i + 63 < cs.length; i += 5) {
+      const hi = Math.max(...cs.slice(i + 1, i + 64).map((c: any) => Number(c.h)));
+      moves.push(hi / Number(cs[i].c) - 1);
+    }
+    moves.sort((a, b) => a - b);
+    const med = moves.length ? moves[Math.floor(moves.length / 2)] : 0.1;
+    const step = Math.min(0.08, Math.max(0.02, med / 2));
+    const yHigh = cs.length ? Math.max(...cs.map((c: any) => Number(c.h))) : entry * 1.1;
+    const cap = Math.max(1.10, (yHigh * 1.05) / entry);
+    const targetAt = (t: number) => entry * Math.min(cap, 1.10 + step * Math.floor(Math.max(0, t - suggestedMs) / (90 * DAY)));
     const since = (q.candles ?? []).filter((c: any) => c.t >= suggestedMs && Number.isFinite(c.h));
     const histPeak = since.length ? Math.max(...since.map((c: any) => Number(c.h))) : 0;
     const peak = Math.max(Number(e.peak_price ?? 0), histPeak, last);
@@ -1161,7 +1178,7 @@ Rules of the strategy you are evaluating:
 - Setup = strong monthly trend + weekly consolidation + sector sync.
 - Target = +10% from entry within 3 months; hitting it closes the trade as "TP hit".
 - Running trades in profit are "winners in progress"; running trades in loss are "losers in progress".
-- Trades are never closed in loss; they run until the target is hit. Target starts at +10% and rises +5% for every 90 days the trade has been running.
+- Trades are never closed in loss; they run until the target is hit. Target starts at +10% and, for every 90 days the trade runs, rises by a step set from that stock's own typical 3-month move (2-8%), capped near its 1-year high. Picks skip loss-making, weak-financial or heavily indebted companies.
 
 Behave like a real analyst: compute stats on request (win rate by sector, by score band, by kind, hold times, drawdowns), spot patterns in what worked and what failed, and give concrete, quantified recommendations for parameter changes. Use markdown, tables where useful, and keep it tight.
 
