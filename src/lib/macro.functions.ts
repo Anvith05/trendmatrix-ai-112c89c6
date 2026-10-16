@@ -120,10 +120,18 @@ export type ValuePick = { symbol: string; name: string; sector: string; ltp: num
 
 /** Live: quality liquid stocks 18-55% off their 1y high that are regaining momentum. Independent of Top Picks/Journal. */
 export const getUndervaluedRebounds = createServerFn({ method: "POST" }).handler(async (): Promise<ValuePick[]> => {
+  const { getFundamentals } = await import("./fundamentals.server");
   const rows = (await scanUniverse()).filter((r) => r.drawdown <= -18 && r.drawdown >= -55 && r.above20 && r.ret20 > 0 && r.turnoverCr >= 10);
-  return rows.map((r) => {
-    const score = Math.round(Math.min(100, Math.abs(r.drawdown) * 1.2 + Math.min(r.ret20, 15) * 2 + (r.above50 ? 15 : 0) + Math.min(r.turnoverCr / 10, 10)));
-    return { symbol: r.symbol, name: r.name, sector: r.sector, ltp: r.ltp, drawdown: r.drawdown, ret20: r.ret20, turnoverCr: r.turnoverCr, score,
-      why: `${Math.abs(r.drawdown).toFixed(0)}% below 1y high, +${r.ret20.toFixed(1)}% in 20 days${r.above50 ? ", back above 50-day avg" : ""}. Upside to old high: +${((r.hi / r.ltp - 1) * 100).toFixed(0)}%` };
-  }).sort((a, b) => b.score - a.score).slice(0, 5);
+  const tech = rows.map((r) => ({ r, t: Math.min(100, Math.abs(r.drawdown) * 1.2 + Math.min(r.ret20, 15) * 2 + (r.above50 ? 15 : 0) + Math.min(r.turnoverCr / 10, 10)) }))
+    .sort((a, b) => b.t - a.t).slice(0, 12);
+  const out: ValuePick[] = [];
+  for (const { r, t } of tech) {
+    const f = await getFundamentals(r.symbol);
+    // Real business check: must be profitable with a decent financial score.
+    if (!f || !f.profitable || f.score < 50) continue;
+    const score = Math.round(t * 0.5 + f.score * 0.5);
+    out.push({ symbol: r.symbol, name: r.name, sector: r.sector, ltp: r.ltp, drawdown: r.drawdown, ret20: r.ret20, turnoverCr: r.turnoverCr, score,
+      why: `${Math.abs(r.drawdown).toFixed(0)}% below 1y high, +${r.ret20.toFixed(1)}% in 20 days${r.above50 ? ", back above 50-day avg" : ""}. Upside to old high: +${((r.hi / r.ltp - 1) * 100).toFixed(0)}%. Financials ${f.score}/100: ${f.reason}` });
+  }
+  return out.sort((a, b) => b.score - a.score).slice(0, 5);
 });
