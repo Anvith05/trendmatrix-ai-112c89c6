@@ -21,6 +21,7 @@ export function SiteNav() {
             { to: "/agents", label: "AI Agents" },
             { to: "/sectors", label: "Sectors" },
             { to: "/macro", label: "Macro Radar" },
+            { to: "/health", label: "Health" },
             
             { to: "/training", label: "Training Lab" },
           ].map((l) => (

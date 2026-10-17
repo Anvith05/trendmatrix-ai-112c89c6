@@ -103,18 +103,82 @@ async function scanUniverse(): Promise<ScanRow[]> {
   return rows;
 }
 
-export type WatchItem = { symbol: string; name: string; why: string; ltp: number | null; drawdown: number | null; zone: "deep_value" | "buy_zone" | "wait" | "n/a" };
+export type WatchItem = { symbol: string; name: string; why: string; ltp: number | null; drawdown: number | null; zone: "deep_value" | "buy_zone" | "wait" | "n/a"; sector?: string; master?: string };
 
 /** Live: top 4 liquid stocks that hold up best on Nifty fall days and bounce hardest on up days. */
 export const getCrashWatchlist = createServerFn({ method: "POST" }).handler(async (): Promise<WatchItem[]> => {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   // Only names that actually ROSE on average on Nifty -1% days (e.g. gold ETFs, defensives).
   const rows = (await scanUniverse()).filter((r) => r.fallAbs != null && r.fallAbs > 0 && r.fallDayAvg != null && r.reboundAvg != null && r.turnoverCr >= (r.kind === "stock" ? 10 : 1));
-  return rows.map((r) => ({ r, s: r.fallAbs! * 2 + r.fallDayAvg! + r.reboundAvg! * 0.5 + (r.above50 ? 0.3 : 0) }))
-    .sort((a, b) => b.s - a.s).slice(0, 4).map(({ r }) => ({
-      symbol: r.symbol, name: r.name, ltp: r.ltp, drawdown: r.drawdown,
+  const ranked = rows.map((r) => ({ r, s: r.fallAbs! * 2 + r.fallDayAvg! + r.reboundAvg! * 0.5 + (r.above50 ? 0.3 : 0) }))
+    .sort((a, b) => b.s - a.s).slice(0, 8).map(({ r }) => ({
+      symbol: r.symbol, name: r.name, ltp: r.ltp, drawdown: r.drawdown, sector: r.sector,
       why: `${r.sector} · avg +${r.fallAbs!.toFixed(2)}% on Nifty fall days · beats Nifty by ${r.fallDayAvg!.toFixed(2)}%/day on fall days, ${r.reboundAvg! >= 0 ? "+" : ""}${r.reboundAvg!.toFixed(2)}% on rebound days`,
-      zone: r.drawdown <= -25 ? "deep_value" : r.drawdown <= -12 ? "buy_zone" : "wait",
+      zone: (r.drawdown <= -25 ? "deep_value" : r.drawdown <= -12 ? "buy_zone" : "wait") as WatchItem["zone"],
     }));
+  const { data: mc } = await supabaseAdmin.from("price_cache").select("payload").eq("symbol", CACHE_KEY).maybeSingle();
+  const rep: any = mc?.payload;
+  const armed = rep && (rep.regime === "caution" || rep.regime === "crash_watch");
+  if (!armed || !ranked.length) return ranked.slice(0, 4);
+  // Master agent picks the shelter names given the live crash radar (cached 30 min).
+  const MK = "__SHELTER_MASTER__";
+  const { data: sc } = await supabaseAdmin.from("price_cache").select("payload, updated_at").eq("symbol", MK).maybeSingle();
+  let picks: { symbol: string; note: string }[] | null = sc && Date.now() - new Date(sc.updated_at).getTime() < TTL_MS ? (sc.payload as any).picks : null;
+  if (!picks) {
+    try {
+      const { callAgentJSON } = await import("./deliberation.server");
+      const r = await callAgentJSON<{ picks: { symbol: string; note: string }[] }>(
+        "You are the Master Conviction agent for an Indian long-only cash trader. The crash radar is warning. From the candidates (all measured to rise on average on Nifty fall days), choose up to 4 best shelters to hold through a fall. Use only the numbers given; never invent data. Prefer diversification (e.g. gold + defensives).",
+        `RADAR: risk ${rep.risk_score}/100 (${rep.regime}). Flags: ${(rep.flags ?? []).join("; ") || "none"}.\nCANDIDATES:\n${JSON.stringify(ranked.map((x) => ({ symbol: x.symbol, name: x.name, sector: x.sector, ltp: x.ltp, drawdown_pct: Number(x.drawdown?.toFixed(1)), stats: x.why })))}`,
+        { type: "object", additionalProperties: false, required: ["picks"], properties: { picks: { type: "array", items: { type: "object", additionalProperties: false, required: ["symbol", "note"], properties: { symbol: { type: "string" }, note: { type: "string" } } } } } },
+        "shelter_picks",
+      );
+      picks = (r.picks ?? []).filter((p) => ranked.some((x) => x.symbol === p.symbol)).slice(0, 4);
+      await supabaseAdmin.from("price_cache").upsert({ symbol: MK, payload: { picks } as any, updated_at: new Date().toISOString() });
+    } catch { return ranked.slice(0, 4); }
+  }
+  return picks.map((p) => ({ ...ranked.find((x) => x.symbol === p.symbol)!, master: p.note }));
+});
+
+export type Exclusion = { symbol: string; name: string; sector: string; ltp: number; reasons: string[] };
+
+/** Why each beaten-down stock (10-70% off its high) is NOT in Undervalued Rebounds. */
+export const getReboundExclusions = createServerFn({ method: "POST" }).handler(async (): Promise<Exclusion[]> => {
+  const { getFundamentals } = await import("./fundamentals.server");
+  const rows = (await scanUniverse()).filter((r) => r.kind === "stock" && r.drawdown <= -10 && r.drawdown >= -70);
+  const out: Exclusion[] = [];
+  for (const r of rows) {
+    const why: string[] = [];
+    if (r.drawdown > -18) why.push(`only ${Math.abs(r.drawdown).toFixed(1)}% below 1y high (needs 18%+)`);
+    if (r.drawdown < -55) why.push(`${Math.abs(r.drawdown).toFixed(1)}% below high (over 55% = too broken)`);
+    if (!r.above20) why.push("price below 20-day average (no momentum yet)");
+    if (r.ret20 <= 0) why.push(`20-day return ${r.ret20.toFixed(1)}% (needs > 0)`);
+    if (r.turnoverCr < 10) why.push(`turnover ₹${r.turnoverCr.toFixed(1)} Cr/day (needs ₹10 Cr+)`);
+    if (!why.length) {
+      const f = await getFundamentals(r.symbol).catch(() => null);
+      if (!f) why.push("no company financials available");
+      else { if (!f.profitable) why.push("loss-making"); if (f.score < 50) why.push(`financial score ${f.score}/100 (needs 50+): ${f.reason}`); }
+    }
+    if (why.length) out.push({ symbol: r.symbol, name: r.name, sector: r.sector, ltp: r.ltp, reasons: why });
+  }
+  return out.sort((a, b) => a.symbol.localeCompare(b.symbol));
+});
+
+export type HealthRow = { symbol: string; name: string; sector: string; risk: number | null; pe: number | null; de: number | null; profitGrowth: number | null; revenueGrowth: number | null; profitable: boolean | null; reason: string; priceOk: boolean; passes: boolean };
+
+/** Financial risk per stock (100 - financial score) plus a price-action check. */
+export const getHealthBoard = createServerFn({ method: "POST" }).handler(async (): Promise<HealthRow[]> => {
+  const { getFundamentals } = await import("./fundamentals.server");
+  const rows = (await scanUniverse()).filter((r) => r.kind === "stock");
+  const out = await Promise.all(rows.map(async (r) => {
+    const f = await getFundamentals(r.symbol).catch(() => null);
+    const priceOk = r.above50 && r.turnoverCr >= 10;
+    const finOk = !!f && f.profitable && f.score >= 50 && (f.debtToEquity == null || f.debtToEquity <= 2);
+    return { symbol: r.symbol, name: r.name, sector: r.sector, risk: f ? 100 - f.score : null, pe: f?.pe ?? null, de: f?.debtToEquity ?? null,
+      profitGrowth: f?.profitGrowth ?? null, revenueGrowth: f?.revenueGrowth ?? null, profitable: f?.profitable ?? null,
+      reason: f?.reason ?? "no financials", priceOk, passes: priceOk && finOk };
+  }));
+  return out.sort((a, b) => (a.risk ?? 999) - (b.risk ?? 999));
 });
 
 export type ValuePick = { symbol: string; name: string; sector: string; ltp: number; drawdown: number; ret20: number; turnoverCr: number; score: number; why: string };

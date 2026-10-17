@@ -46,6 +46,7 @@ function MacroPage() {
                 <div className="flex justify-between"><span className="font-mono font-bold">{w.symbol}</span>
                   <span className="font-mono text-sm">{w.ltp != null ? `₹${w.ltp.toFixed(2)}` : "—"}</span></div>
                 <div className="text-xs text-muted-foreground">{w.name} · {w.why}</div>
+                {w.master && <div className="mt-1 text-xs"><span className="font-mono text-primary">MASTER:</span> {w.master}</div>}
                 <div className="mt-2 flex justify-between text-xs font-mono">
                   <span className="text-muted-foreground">{w.drawdown != null ? `${w.drawdown.toFixed(1)}% from high` : ""}</span>
                   <span className="text-primary">{ZONE[w.zone]}</span>
