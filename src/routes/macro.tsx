@@ -33,27 +33,28 @@ function MacroPage() {
       <SiteNav />
       <div className="mx-auto max-w-7xl space-y-8 px-4 py-8">
         <MacroRegimeCard full />
-        <section>
-          <h2 className="font-display text-lg font-semibold">Crash Shopping Watchlist</h2>
-          <p className="mb-3 text-xs text-muted-foreground">
-            {armed ? "Radar is Defensive/Crash — deploy cash in tranches (e.g. 1/3 now, 1/3 at -5% more, 1/3 on reversal)." : "Radar is Risk-On — keep this list ready; deploy only when the radar turns Defensive or Crash."}
-            {" "}Live top 4: stocks that fell least on Nifty fall days and bounced hardest after. Drawdown is from the 1-year high.
-          </p>
+        {regime && !armed && (
+          <div className="rounded-xl glass p-4 text-sm text-muted-foreground">No crash signals right now (radar is Risk-On), so no crash-shelter picks are shown.</div>
+        )}
+        {armed && <section>
+          <h2 className="font-display text-lg font-semibold">Crash Shelter Picks</h2>
+          <p className="mb-3 text-xs text-muted-foreground">Crash signals active. Up to 4 stocks or ETFs (like gold) that on average went UP on days Nifty fell over 1%, ranked live. Not a guarantee.</p>
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            {items?.length === 0 && <div className="text-sm text-muted-foreground">Nothing in the list rose on fall days recently.</div>}
             {(items ?? []).map((w) => (
-              <div key={w.symbol} className={`rounded-xl glass p-4 ${armed && w.zone !== "wait" ? "border-success/50" : ""}`}>
+              <div key={w.symbol} className="rounded-xl glass p-4 border-success/50">
                 <div className="flex justify-between"><span className="font-mono font-bold">{w.symbol}</span>
                   <span className="font-mono text-sm">{w.ltp != null ? `₹${w.ltp.toFixed(2)}` : "—"}</span></div>
                 <div className="text-xs text-muted-foreground">{w.name} · {w.why}</div>
                 <div className="mt-2 flex justify-between text-xs font-mono">
-                  <span className={w.drawdown != null && w.drawdown <= -12 ? "text-success" : "text-muted-foreground"}>{w.drawdown != null ? `${w.drawdown.toFixed(1)}% from high` : ""}</span>
+                  <span className="text-muted-foreground">{w.drawdown != null ? `${w.drawdown.toFixed(1)}% from high` : ""}</span>
                   <span className="text-primary">{ZONE[w.zone]}</span>
                 </div>
               </div>
             ))}
             {!items && <div className="h-24 animate-pulse rounded-xl glass" />}
           </div>
-        </section>
+        </section>}
       </div>
     </div>
   );
