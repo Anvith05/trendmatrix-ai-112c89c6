@@ -71,7 +71,7 @@ export const getMacroRegime = createServerFn({ method: "POST" })
 type ScanRow = { symbol: string; name: string; sector: string; ltp: number; hi: number; drawdown: number;
   ret20: number; above20: boolean; above50: boolean; turnoverCr: number; fallAbs?: number | null; kind?: string; fallDayAvg: number | null; reboundAvg: number | null; ret1y: number };
 
-const SCAN_KEY = "__UNIVERSE_SCAN__";
+const SCAN_KEY = "__UNIVERSE_SCAN_V2__";
 async function scanUniverse(): Promise<ScanRow[]> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: c } = await supabaseAdmin.from("price_cache").select("payload, updated_at").eq("symbol", SCAN_KEY).maybeSingle();
@@ -122,7 +122,7 @@ export type ValuePick = { symbol: string; name: string; sector: string; ltp: num
 /** Live: quality liquid stocks 18-55% off their 1y high that are regaining momentum. Independent of Top Picks/Journal. */
 export const getUndervaluedRebounds = createServerFn({ method: "POST" }).handler(async (): Promise<ValuePick[]> => {
   const { getFundamentals } = await import("./fundamentals.server");
-  const rows = (await scanUniverse()).filter((r) => r.drawdown <= -18 && r.drawdown >= -55 && r.above20 && r.ret20 > 0 && r.turnoverCr >= 10);
+  const rows = (await scanUniverse()).filter((r) => r.kind === "stock" && r.drawdown <= -18 && r.drawdown >= -55 && r.above20 && r.ret20 > 0 && r.turnoverCr >= 10);
   const tech = rows.map((r) => ({ r, t: Math.min(100, Math.abs(r.drawdown) * 1.2 + Math.min(r.ret20, 15) * 2 + (r.above50 ? 15 : 0) + Math.min(r.turnoverCr / 10, 10)) }))
     .sort((a, b) => b.t - a.t).slice(0, 12);
   const out: ValuePick[] = [];
