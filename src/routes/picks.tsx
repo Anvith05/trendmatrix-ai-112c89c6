@@ -5,7 +5,7 @@ import { SiteNav } from "@/components/SiteNav";
 import { Ticker } from "@/components/Ticker";
 import { getLatestRankings, getQuote, getRecommendations, markPickRead, removePick, runAgents } from "@/lib/market.functions";
 import { supabase } from "@/integrations/supabase/client";
-import { getUndervaluedRebounds, type ValuePick } from "@/lib/macro.functions";
+import { getUndervaluedRebounds, getReboundExclusions, type ValuePick, type Exclusion } from "@/lib/macro.functions";
 import { PinPrompt, usePinUnlocked } from "@/components/PinGate";
 import { Sparkles, TrendingUp, Loader2, RefreshCw, ArrowRight, Trash2, Upload, X, BookOpenCheck } from "lucide-react";
 
@@ -120,6 +120,7 @@ function Picks() {
         </section>
 
         <ValueSection />
+        <ExcludedSection />
       </div>
     </div>
   );
@@ -150,6 +151,33 @@ function ValueSection() {
 }
 
 
+
+function ExcludedSection() {
+  const fn = useServerFn(getReboundExclusions);
+  const [items, setItems] = useState<Exclusion[] | null>(null);
+  const [open, setOpen] = useState(false);
+  useEffect(() => { if (open && !items) fn().then(setItems).catch(() => setItems([])); }, [open]);
+  return (
+    <section className="mb-10">
+      <button onClick={() => setOpen((v) => !v)} className="font-display text-lg font-semibold hover:text-primary">
+        {open ? "▾" : "▸"} Why other fallen stocks were left out
+      </button>
+      {open && (
+        <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+          {!items && <div className="h-24 animate-pulse rounded-xl glass" />}
+          {items?.length === 0 && <div className="text-sm text-muted-foreground">No exclusions.</div>}
+          {items?.map((x) => (
+            <div key={x.symbol} className="rounded-xl glass p-4">
+              <div className="flex justify-between"><span className="font-mono font-bold">{x.symbol}</span><span className="font-mono text-sm">₹{x.ltp.toFixed(2)}</span></div>
+              <div className="text-xs text-muted-foreground">{x.name} · {x.sector}</div>
+              <ul className="mt-2 list-disc pl-4 text-xs text-destructive">{x.reasons.map((r) => <li key={r}>{r}</li>)}</ul>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
 
 function PickCard({ r, onRemoved, onRead }: { r: Rec; onRemoved: () => void; onRead: () => void }) {
   const removeFn = useServerFn(removePick);
