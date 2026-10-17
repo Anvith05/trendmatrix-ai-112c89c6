@@ -69,7 +69,7 @@ export const getMacroRegime = createServerFn({ method: "POST" })
 
 // ---- Live universe scan (cached 30 min) shared by Crash Shopping + Undervalued Rebounds ----
 type ScanRow = { symbol: string; name: string; sector: string; ltp: number; hi: number; drawdown: number;
-  ret20: number; above20: boolean; above50: boolean; turnoverCr: number; fallDayAvg: number | null; reboundAvg: number | null; ret1y: number };
+  ret20: number; above20: boolean; above50: boolean; turnoverCr: number; fallAbs?: number | null; kind?: string; fallDayAvg: number | null; reboundAvg: number | null; ret1y: number };
 
 const SCAN_KEY = "__UNIVERSE_SCAN__";
 async function scanUniverse(): Promise<ScanRow[]> {
@@ -82,22 +82,22 @@ async function scanUniverse(): Promise<ScanRow[]> {
   const nRet = new Map<number, number>();
   (nifty?.candles ?? []).forEach((k, i, a) => { if (i) nRet.set(Math.floor(k.t / 86400), (k.c - a[i - 1].c) / a[i - 1].c * 100); });
   const rows: ScanRow[] = [];
-  await Promise.all((uni ?? []).filter((u) => u.kind === "stock").map(async (u) => {
+  await Promise.all((uni ?? []).map(async (u) => {
     const q = await fetchYahooChart(u.yahoo_symbol, "1y", "1d").catch(() => null);
     const k = q?.candles ?? []; if (k.length < 120) return;
     const cl = k.map((x) => x.c); const ltp = cl[cl.length - 1];
     const hi = Math.max(...k.map((x) => x.h));
     const sma = (n: number) => cl.slice(-n).reduce((a, b) => a + b, 0) / n;
     const turnover = k.slice(-20).reduce((a, x) => a + x.c * ((x as any).v ?? 0), 0) / 20 / 1e7;
-    const fall: number[] = [], reb: number[] = [];
+    const fall: number[] = [], reb: number[] = [], fa: number[] = [];
     k.forEach((x, i) => { if (!i) return; const nr = nRet.get(Math.floor(x.t / 86400)); if (nr == null) return;
       const r = (x.c - k[i - 1].c) / k[i - 1].c * 100;
-      if (nr <= -1) fall.push(r - nr); // outperformance vs Nifty on fall days
+      if (nr <= -1) { fall.push(r - nr); fa.push(r); } // outperformance vs Nifty on fall days
       if (nr >= 1) reb.push(r - nr); });
     const avg = (a: number[]) => a.length >= 3 ? a.reduce((s, v) => s + v, 0) / a.length : null;
     rows.push({ symbol: u.symbol, name: u.name, sector: u.sector, ltp, hi, drawdown: (ltp - hi) / hi * 100,
       ret20: (ltp - cl[cl.length - 21]) / cl[cl.length - 21] * 100, above20: ltp > sma(20), above50: ltp > sma(50),
-      turnoverCr: turnover, fallDayAvg: avg(fall), reboundAvg: avg(reb), ret1y: (ltp - cl[0]) / cl[0] * 100 });
+      turnoverCr: turnover, fallAbs: avg(fa), kind: u.kind, fallDayAvg: avg(fall), reboundAvg: avg(reb), ret1y: (ltp - cl[0]) / cl[0] * 100 });
   }));
   await supabaseAdmin.from("price_cache").upsert({ symbol: SCAN_KEY, payload: rows as any, updated_at: new Date().toISOString() });
   return rows;
@@ -107,11 +107,12 @@ export type WatchItem = { symbol: string; name: string; why: string; ltp: number
 
 /** Live: top 4 liquid stocks that hold up best on Nifty fall days and bounce hardest on up days. */
 export const getCrashWatchlist = createServerFn({ method: "POST" }).handler(async (): Promise<WatchItem[]> => {
-  const rows = (await scanUniverse()).filter((r) => r.fallDayAvg != null && r.reboundAvg != null && r.turnoverCr >= 10);
-  return rows.map((r) => ({ r, s: r.fallDayAvg! * 1.5 + r.reboundAvg! + (r.above50 ? 0.3 : 0) }))
+  // Only names that actually ROSE on average on Nifty -1% days (e.g. gold ETFs, defensives).
+  const rows = (await scanUniverse()).filter((r) => r.fallAbs != null && r.fallAbs > 0 && r.fallDayAvg != null && r.reboundAvg != null && r.turnoverCr >= (r.kind === "stock" ? 10 : 1));
+  return rows.map((r) => ({ r, s: r.fallAbs! * 2 + r.fallDayAvg! + r.reboundAvg! * 0.5 + (r.above50 ? 0.3 : 0) }))
     .sort((a, b) => b.s - a.s).slice(0, 4).map(({ r }) => ({
       symbol: r.symbol, name: r.name, ltp: r.ltp, drawdown: r.drawdown,
-      why: `${r.sector} · beats Nifty by ${r.fallDayAvg!.toFixed(2)}%/day on fall days, ${r.reboundAvg! >= 0 ? "+" : ""}${r.reboundAvg!.toFixed(2)}% on rebound days`,
+      why: `${r.sector} · avg +${r.fallAbs!.toFixed(2)}% on Nifty fall days · beats Nifty by ${r.fallDayAvg!.toFixed(2)}%/day on fall days, ${r.reboundAvg! >= 0 ? "+" : ""}${r.reboundAvg!.toFixed(2)}% on rebound days`,
       zone: r.drawdown <= -25 ? "deep_value" : r.drawdown <= -12 ? "buy_zone" : "wait",
     }));
 });
