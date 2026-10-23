@@ -308,8 +308,8 @@ function PickCard({ r, onRemoved, onRead }: { r: Rec; onRemoved: () => void; onR
         </Link>
       </div>
 
-      {askPin && !pin.ok && (
-        <div className="mt-3"><PinPrompt label="Enter the access PIN to change this pick." onUnlock={() => { pin.setOk(true); if (askPin === "remove") setShowRemove(true); setAskPin(null); }} /></div>
+      {askPin && (
+        <div className="mt-3"><PinPrompt label="Enter the access PIN to change this pick." onUnlock={() => { if (askPin === "remove") setShowRemove(true); else doRead(); setAskPin(null); }} /></div>
       )}
 
       {showRemove && (
