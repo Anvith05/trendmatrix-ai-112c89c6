@@ -226,7 +226,7 @@ function PickCard({ r, onRemoved, onRead }: { r: Rec; onRemoved: () => void; onR
     finally { setReading(false); }
   }
 
-
+  return (
     <div className="rounded-xl glass p-4 transition hover:border-primary/40">
       <div className="flex items-start justify-between">
         <div>
