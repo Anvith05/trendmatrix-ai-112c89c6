@@ -6,7 +6,7 @@ import { Ticker } from "@/components/Ticker";
 import { getLatestRankings, getQuote, getRecommendations, markPickRead, removePick, runAgents } from "@/lib/market.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { getUndervaluedRebounds, getReboundExclusions, type ValuePick, type Exclusion } from "@/lib/macro.functions";
-import { PinPrompt, usePinUnlocked } from "@/components/PinGate";
+import { PinPrompt } from "@/components/PinGate";
 import { Sparkles, TrendingUp, Loader2, RefreshCw, ArrowRight, Trash2, Upload, X, BookOpenCheck } from "lucide-react";
 
 
@@ -183,7 +183,6 @@ function PickCard({ r, onRemoved, onRead }: { r: Rec; onRemoved: () => void; onR
   const removeFn = useServerFn(removePick);
   const readFn = useServerFn(markPickRead);
   const [reading, setReading] = useState(false);
-  const pin = usePinUnlocked();
   const [askPin, setAskPin] = useState<null | "remove" | "read">(null);
   const [showRemove, setShowRemove] = useState(false);
   const [reason, setReason] = useState("");
@@ -221,7 +220,13 @@ function PickCard({ r, onRemoved, onRead }: { r: Rec; onRemoved: () => void; onR
     } finally { setBusy(false); }
   }
 
-  return (
+  async function doRead() {
+    setReading(true);
+    try { await readFn({ data: { id: r.id } }); await onRead(); }
+    finally { setReading(false); }
+  }
+
+
     <div className="rounded-xl glass p-4 transition hover:border-primary/40">
       <div className="flex items-start justify-between">
         <div>
@@ -285,17 +290,12 @@ function PickCard({ r, onRemoved, onRead }: { r: Rec; onRemoved: () => void; onR
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <button onClick={() => pin.ok ? setShowRemove((v) => !v) : setAskPin("remove")}
+          <button onClick={() => setAskPin("remove")}
             className="inline-flex items-center gap-1 rounded-md border border-destructive/40 px-2 py-1 text-[11px] font-semibold text-destructive hover:bg-destructive/10">
             <Trash2 className="h-3 w-3" /> Remove
           </button>
           <button
-            onClick={async () => {
-              if (!pin.ok) { setAskPin("read"); return; }
-              setReading(true);
-              try { await readFn({ data: { id: r.id } }); await onRead(); }
-              finally { setReading(false); }
-            }}
+            onClick={() => setAskPin("read")}
             disabled={reading}
             title="Mark as read — track it from the Journal and scan for new picks"
             className="inline-flex items-center gap-1 rounded-md border border-primary/40 px-2 py-1 text-[11px] font-semibold text-primary hover:bg-primary/10 disabled:opacity-50">
