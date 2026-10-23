@@ -1,7 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Lock, ShieldCheck } from "lucide-react";
 
-const KEY = "tm_access_pin_ok";
 const PIN = "9912510781";
 
 // Chat unlock is per page-load only (never persisted) so a random visitor
@@ -25,14 +24,25 @@ export function useChatPinUnlocked() {
   };
 }
 
+// Unlock lives only in memory: every fresh page load asks for the PIN again,
+// so the gate never silently stays open for a random visitor.
+let areaUnlocked = false;
+
 export function usePinUnlocked() {
   const [ok, setOk] = useState(false);
   const [ready, setReady] = useState(false);
   useEffect(() => {
-    setOk(localStorage.getItem(KEY) === "1");
+    setOk(areaUnlocked);
     setReady(true);
   }, []);
-  return { ok, ready, setOk };
+  return {
+    ok,
+    ready,
+    setOk: (v: boolean) => {
+      areaUnlocked = v;
+      setOk(v);
+    },
+  };
 }
 
 export function PinPrompt({ label, onUnlock }: { label?: string; onUnlock: () => void }) {
@@ -44,7 +54,6 @@ export function PinPrompt({ label, onUnlock }: { label?: string; onUnlock: () =>
       onSubmit={(e) => {
         e.preventDefault();
         if (value.trim() === PIN) {
-          localStorage.setItem(KEY, "1");
           setError(null);
           onUnlock();
         } else setError("Incorrect PIN");
@@ -86,7 +95,6 @@ export function PinGate({ area, children }: { area: string; children: ReactNode 
         <div className="mx-auto flex max-w-7xl items-center justify-end px-4 pt-3">
           <button
             onClick={() => {
-              localStorage.removeItem(KEY);
               setOk(false);
             }}
             className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-muted-foreground transition hover:text-foreground"
@@ -114,7 +122,6 @@ export function PinGate({ area, children }: { area: string; children: ReactNode 
           onSubmit={(e) => {
             e.preventDefault();
             if (value.trim() === PIN) {
-              localStorage.setItem(KEY, "1");
               setOk(true);
               setError(null);
             } else {
