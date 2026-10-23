@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { SiteNav } from "@/components/SiteNav";
+import { PinPrompt } from "@/components/PinGate";
 import { Ticker } from "@/components/Ticker";
 import { discardJournalTrade, getJournal, updateJournalOutcomes } from "@/lib/market.functions";
 import { JournalAgent } from "@/components/JournalAgent";
@@ -58,6 +59,7 @@ function StatusBadge({ s }: { s: string }) {
 function DiscardButton({ entry, onDone }: { entry: Entry; onDone: () => void }) {
   const discard = useServerFn(discardJournalTrade);
   const [open, setOpen] = useState(false);
+  const [pinOk, setPinOk] = useState(false);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -73,6 +75,13 @@ function DiscardButton({ entry, onDone }: { entry: Entry; onDone: () => void }) 
         className="inline-flex items-center gap-1 rounded-md border border-destructive/40 px-2 py-1 text-[11px] font-semibold text-destructive hover:bg-destructive/10">
         <Trash2 className="h-3 w-3" /> Delete
       </button>
+    );
+  }
+  if (!pinOk) {
+    return (
+      <div className="w-64 rounded-md border border-destructive/30 bg-destructive/5 p-2">
+        <PinPrompt label="Enter the access PIN to delete this trade." onUnlock={() => setPinOk(true)} />
+      </div>
     );
   }
   return (
