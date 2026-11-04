@@ -164,23 +164,6 @@ export const getReboundExclusions = createServerFn({ method: "POST" }).handler(a
   return out.sort((a, b) => a.symbol.localeCompare(b.symbol));
 });
 
-export type HealthRow = { symbol: string; name: string; sector: string; risk: number | null; pe: number | null; de: number | null; profitGrowth: number | null; revenueGrowth: number | null; profitable: boolean | null; reason: string; priceOk: boolean; passes: boolean };
-
-/** Financial risk per stock (100 - financial score) plus a price-action check. */
-export const getHealthBoard = createServerFn({ method: "POST" }).handler(async (): Promise<HealthRow[]> => {
-  const { getFundamentals } = await import("./fundamentals.server");
-  const rows = (await scanUniverse()).filter((r) => r.kind === "stock");
-  const out = await Promise.all(rows.map(async (r) => {
-    const f = await getFundamentals(r.symbol).catch(() => null);
-    const priceOk = r.above50 && r.turnoverCr >= 10;
-    const finOk = !!f && f.profitable && f.score >= 50 && (f.debtToEquity == null || f.debtToEquity <= 2);
-    return { symbol: r.symbol, name: r.name, sector: r.sector, risk: f ? 100 - f.score : null, pe: f?.pe ?? null, de: f?.debtToEquity ?? null,
-      profitGrowth: f?.profitGrowth ?? null, revenueGrowth: f?.revenueGrowth ?? null, profitable: f?.profitable ?? null,
-      reason: f?.reason ?? "no financials", priceOk, passes: priceOk && finOk };
-  }));
-  return out.sort((a, b) => (a.risk ?? 999) - (b.risk ?? 999));
-});
-
 export type ValuePick = { symbol: string; name: string; sector: string; ltp: number; drawdown: number; ret20: number; turnoverCr: number; score: number; why: string };
 
 /** Live: quality liquid stocks 18-55% off their 1y high that are regaining momentum. Independent of Top Picks/Journal. */

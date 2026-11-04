@@ -12,7 +12,6 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AgentsRouteImport } from './routes/agents'
 import { Route as DashboardRouteImport } from './routes/dashboard'
-import { Route as HealthRouteImport } from './routes/health'
 import { Route as JournalRouteImport } from './routes/journal'
 import { Route as MacroRouteImport } from './routes/macro'
 import { Route as PicksRouteImport } from './routes/picks'
@@ -35,11 +34,6 @@ const AgentsRoute = AgentsRouteImport.update({
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const HealthRoute = HealthRouteImport.update({
-  id: '/health',
-  path: '/health',
   getParentRoute: () => rootRouteImport,
 } as any)
 const JournalRoute = JournalRouteImport.update({
@@ -87,7 +81,6 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
   '/dashboard': typeof DashboardRoute
-  '/health': typeof HealthRoute
   '/journal': typeof JournalRoute
   '/macro': typeof MacroRoute
   '/picks': typeof PicksRoute
@@ -101,7 +94,6 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
   '/dashboard': typeof DashboardRoute
-  '/health': typeof HealthRoute
   '/journal': typeof JournalRoute
   '/macro': typeof MacroRoute
   '/picks': typeof PicksRoute
@@ -116,7 +108,6 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
   '/dashboard': typeof DashboardRoute
-  '/health': typeof HealthRoute
   '/journal': typeof JournalRoute
   '/macro': typeof MacroRoute
   '/picks': typeof PicksRoute
@@ -132,7 +123,6 @@ export interface FileRouteTypes {
     | '/'
     | '/agents'
     | '/dashboard'
-    | '/health'
     | '/journal'
     | '/macro'
     | '/picks'
@@ -146,7 +136,6 @@ export interface FileRouteTypes {
     | '/'
     | '/agents'
     | '/dashboard'
-    | '/health'
     | '/journal'
     | '/macro'
     | '/picks'
@@ -160,7 +149,6 @@ export interface FileRouteTypes {
     | '/'
     | '/agents'
     | '/dashboard'
-    | '/health'
     | '/journal'
     | '/macro'
     | '/picks'
@@ -175,7 +163,6 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AgentsRoute: typeof AgentsRoute
   DashboardRoute: typeof DashboardRoute
-  HealthRoute: typeof HealthRoute
   JournalRoute: typeof JournalRoute
   MacroRoute: typeof MacroRoute
   PicksRoute: typeof PicksRoute
@@ -207,13 +194,6 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof DashboardRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/health': {
-      id: '/health'
-      path: '/health'
-      fullPath: '/health'
-      preLoaderRoute: typeof HealthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/journal': {
@@ -279,7 +259,6 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AgentsRoute: AgentsRoute,
   DashboardRoute: DashboardRoute,
-  HealthRoute: HealthRoute,
   JournalRoute: JournalRoute,
   MacroRoute: MacroRoute,
   PicksRoute: PicksRoute,
