@@ -119,6 +119,8 @@ function Section({ title, icon, entries, onChanged }: { title: string; icon: Rea
               <th className="px-3 py-2">Entry</th>
               <th className="px-3 py-2">Target</th>
               <th className="px-3 py-2">Current</th>
+              <th className="px-3 py-2">Peak reached</th>
+              <th className="px-3 py-2">Max rise</th>
               <th className="px-3 py-2">P/L</th>
               <th className="px-3 py-2">Status</th>
               <th className="px-3 py-2">Closed</th>
@@ -128,7 +130,7 @@ function Section({ title, icon, entries, onChanged }: { title: string; icon: Rea
           </thead>
           <tbody>
             {entries.length === 0 && (
-              <tr><td colSpan={12} className="px-3 py-8 text-center text-muted-foreground">No entries yet.</td></tr>
+              <tr><td colSpan={14} className="px-3 py-8 text-center text-muted-foreground">No entries yet.</td></tr>
             )}
             {entries.map((e) => {
               // For closed TP hits, show the realized return at target (peak), not the pulled-back price.
@@ -136,6 +138,7 @@ function Section({ title, icon, entries, onChanged }: { title: string; icon: Rea
               const p = closedWin
                 ? Math.max(pct(e.peak_price, e.entry_price) ?? 10, 10)
                 : pct(e.current_price, e.entry_price);
+              const peakRise = pct(e.peak_price, e.entry_price);
               const target = e.entry_price ? e.entry_price * 1.1 : null;
               return (
                 <tr key={e.id} className="border-t border-border/60 hover:bg-secondary/20">
@@ -158,6 +161,12 @@ function Section({ title, icon, entries, onChanged }: { title: string; icon: Rea
                       ? (e.peak_price ? `₹${Number(e.peak_price).toFixed(2)}` : target ? `₹${target.toFixed(2)}` : "—")
                       : e.current_price ? `₹${Number(e.current_price).toFixed(2)}` : "—"}
                     {closedWin && <div className="text-[9px] text-muted-foreground">at target</div>}
+                  </td>
+                  <td className="px-3 py-2 font-mono">
+                    {e.peak_price ? `₹${Number(e.peak_price).toFixed(2)}` : "—"}
+                  </td>
+                  <td className={`px-3 py-2 font-mono ${peakRise == null ? "text-muted-foreground" : peakRise >= 0 ? "text-success" : "text-destructive"}`}>
+                    {peakRise == null ? "—" : `+${peakRise.toFixed(1)}%`}
                   </td>
                   <td className={`px-3 py-2 font-mono ${p == null ? "" : p >= 0 ? "text-success" : "text-destructive"}`}>
                     {p == null ? "—" : `${p >= 0 ? "+" : ""}${p.toFixed(1)}%`}
