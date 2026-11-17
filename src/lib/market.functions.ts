@@ -922,13 +922,16 @@ export const getJournal = createServerFn({ method: "GET" }).handler(async () => 
 // applies winner (≥10% from entry) / loser (after 90d still negative) rules.
 export const updateJournalOutcomes = createServerFn({ method: "POST" }).handler(async () => {
   const { data: entries } = await supabaseAdmin
-    .from("journal_entries").select("*").eq("status", "in_progress");
+    .from("journal_entries").select("*");
   let promoted = 0, busted = 0, updated = 0;
   for (const e of entries ?? []) {
+    const isRunning = e.status === "in_progress";
+    // Backfill legacy closed losers that never had their maximum price saved.
+    if (!isRunning && !(e.status === "loser" && e.peak_price == null)) continue;
     const { data: u } = await supabaseAdmin.from("stock_universe")
       .select("yahoo_symbol").eq("symbol", e.symbol).maybeSingle();
     const ys = u?.yahoo_symbol ?? `${e.symbol}.NS`;
-    const q = await fetchYahooChart(ys, "1y", "1d");
+    const q = await fetchYahooChart(ys, isRunning ? "1y" : "max", "1d");
     if (!q) continue;
     const last = Number(q.ltp ?? 0);
     const entry = Number(e.entry_price ?? 0);
@@ -952,9 +955,20 @@ export const updateJournalOutcomes = createServerFn({ method: "POST" }).handler(
     const yHigh = cs.length ? Math.max(...cs.map((c: any) => Number(c.h))) : entry * 1.1;
     const cap = Math.max(1.10, (yHigh * 1.05) / entry);
     const targetAt = (t: number) => entry * Math.min(cap, 1.10 + step * Math.floor(Math.max(0, t - suggestedMs) / (90 * DAY)));
-    const since = (q.candles ?? []).filter((c: any) => c.t >= suggestedMs && Number.isFinite(c.h));
+    const closedMs = e.closed_at ? new Date(e.closed_at).getTime() : Date.now();
+    const since = (q.candles ?? []).filter((c: any) =>
+      c.t >= suggestedMs && (isRunning || c.t <= closedMs) && Number.isFinite(c.h),
+    );
     const histPeak = since.length ? Math.max(...since.map((c: any) => Number(c.h))) : 0;
-    const peak = Math.max(Number(e.peak_price ?? 0), histPeak, last);
+    const peak = Math.max(Number(e.peak_price ?? 0), histPeak, isRunning ? last : 0);
+    if (!isRunning) {
+      await supabaseAdmin.from("journal_entries").update({
+        peak_price: peak || null,
+        last_checked_at: new Date().toISOString(),
+      }).eq("id", e.id);
+      updated++;
+      continue;
+    }
     const hitCandle = since.find((c: any) => Number(c.h) >= targetAt(c.t));
     const ageMs = Date.now() - suggestedMs;
     let status = "in_progress";
