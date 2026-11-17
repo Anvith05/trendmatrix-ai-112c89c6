@@ -166,7 +166,7 @@ function Section({ title, icon, entries, onChanged }: { title: string; icon: Rea
                     {e.peak_price ? `₹${Number(e.peak_price).toFixed(2)}` : "—"}
                   </td>
                   <td className={`px-3 py-2 font-mono ${peakRise == null ? "text-muted-foreground" : peakRise >= 0 ? "text-success" : "text-destructive"}`}>
-                    {peakRise == null ? "—" : `+${peakRise.toFixed(1)}%`}
+                    {peakRise == null ? "—" : `${peakRise >= 0 ? "+" : ""}${peakRise.toFixed(1)}%`}
                   </td>
                   <td className={`px-3 py-2 font-mono ${p == null ? "" : p >= 0 ? "text-success" : "text-destructive"}`}>
                     {p == null ? "—" : `${p >= 0 ? "+" : ""}${p.toFixed(1)}%`}
